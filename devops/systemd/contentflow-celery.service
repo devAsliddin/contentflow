@@ -1,0 +1,28 @@
+[Unit]
+Description=ContentFlow Celery Worker
+After=network.target redis.service postgresql.service
+Wants=redis.service postgresql.service
+
+[Service]
+Type=exec
+User=contentflow
+Group=contentflow
+WorkingDirectory=/var/www/contentflow/backend
+EnvironmentFile=/etc/contentflow/.env
+ExecStart=/var/www/contentflow/venv/bin/celery \
+    -A app.tasks.celery_app worker \
+    --loglevel=info \
+    --concurrency=4 \
+    --queues=celery \
+    --hostname=worker@%h
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=contentflow-celery
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

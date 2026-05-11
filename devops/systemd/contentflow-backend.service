@@ -1,0 +1,29 @@
+[Unit]
+Description=ContentFlow FastAPI Backend
+After=network.target postgresql.service redis.service
+Wants=postgresql.service redis.service
+
+[Service]
+Type=exec
+User=contentflow
+Group=contentflow
+WorkingDirectory=/var/www/contentflow/backend
+EnvironmentFile=/etc/contentflow/.env
+ExecStart=/var/www/contentflow/venv/bin/uvicorn app.main:app \
+    --host 0.0.0.0 \
+    --port 8000 \
+    --workers 2 \
+    --log-level info \
+    --access-log
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=contentflow-backend
+
+# Security hardening
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

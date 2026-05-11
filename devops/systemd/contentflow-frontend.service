@@ -1,0 +1,13 @@
+[Unit]
+Description=ContentFlow Frontend (served by Nginx)
+After=nginx.service
+Wants=nginx.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/true
+StandardOutput=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,66 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+*.so
+.venv/
+venv/
+env/
+.env
+.env.*
+!.env.example
+
+# Node
+node_modules/
+dist/
+.next/
+out/
+.nuxt/
+.output/
+
+# Media uploads (don't commit user data)
+backend/media/
+media/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Alembic (keep migrations but not compiled)
+backend/alembic/versions/__pycache__/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Build artifacts
+frontend/dist/
+frontend/build/
+
+# Test coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Secrets
+*.pem
+*.key
+*.cert
+*.crt
+secrets/
