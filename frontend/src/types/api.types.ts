@@ -91,3 +91,59 @@ export interface PostIdea {
 export interface IdeasResponse {
   ideas: PostIdea[]
 }
+
+// V2 analytics types
+
+export interface PlatformDayCount {
+  date: string         // "2026-05-06"
+  telegram: number
+  instagram: number
+  tiktok: number
+}
+
+export interface PlatformComparison {
+  date: string
+  telegram: number
+  instagram: number
+  tiktok: number
+}
+
+export interface PostPerformance {
+  id: string
+  platform: string
+  caption: string | null
+  published_at: string
+  views: number
+  likes: number
+  reach: number
+}
+
+export interface FollowerGrowthPoint {
+  date: string
+  telegram: number
+  instagram: number
+  tiktok: number
+  total: number
+}
+
+export interface FollowerAccountPoint {
+  date: string
+  followers: number
+}
+
+export interface FollowerAccountSeries {
+  account_id: string | null
+  account_name: string
+  platform: string
+  latest_count: number
+  delta: number
+  series: FollowerAccountPoint[]
+}
+
+export interface FollowerGrowthResponse {
+  days: number
+  platform: string | null
+  account_id: string | null
+  series: FollowerGrowthPoint[]
+  accounts: FollowerAccountSeries[]
+}

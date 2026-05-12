@@ -25,3 +25,6 @@ class Account(Base):
 
     user: Mapped["User"] = relationship(back_populates="accounts")
     post_logs: Mapped[list["PostLog"]] = relationship(back_populates="account", cascade="all, delete-orphan")
+    follower_snapshots: Mapped[list["FollowerSnapshot"]] = relationship(
+        back_populates="account", cascade="all, delete-orphan"
+    )
