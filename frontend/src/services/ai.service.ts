@@ -5,6 +5,7 @@ import type {
   GenerateCaptionRequest, CaptionResponse,
   HashtagRequest, HashtagResponse,
   IdeasResponse,
+  ToneAnalyzeRequest, ToneAnalyzeResponse,
 } from '@/types/api.types'
 
 function getV2BaseUrl() {
@@ -32,6 +33,19 @@ export const aiService = {
     const token = localStorage.getItem('access_token')
     const { data } = await axios.post<HashtagResponse>(
       `${BASE_URL}/ai/hashtags`,
+      payload,
+      {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      }
+    )
+    return data
+  },
+
+  async analyzeTone(payload: ToneAnalyzeRequest): Promise<ToneAnalyzeResponse> {
+    const BASE_URL = getV2BaseUrl()
+    const token = localStorage.getItem('access_token')
+    const { data } = await axios.post<ToneAnalyzeResponse>(
+      `${BASE_URL}/ai/analyze-tone`,
       payload,
       {
         headers: token ? { Authorization: `Bearer ${token}` } : {},

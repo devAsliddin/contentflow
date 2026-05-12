@@ -59,6 +59,20 @@ class HashtagResponse(BaseModel):
     source: Literal["ai", "fallback"]
 
 
+class ToneAnalyzeRequest(BaseModel):
+    caption: str = Field(..., min_length=1, max_length=4096)
+    target_platform: Literal["instagram", "tiktok", "telegram"] | None = None
+    language: str = Field(default="uz", max_length=20)
+
+
+class ToneAnalyzeResponse(BaseModel):
+    tone: Literal["professional", "casual", "fun", "mixed"]
+    scores: dict[str, float]
+    confidence: float = Field(..., ge=0, le=1)
+    suggestions: list[str]
+    source: Literal["ai", "fallback"]
+
+
 # ─── Platform style instructions ──────────────────────────────────────────────
 
 _PLATFORM_INSTRUCTIONS: dict[str, str] = {
@@ -166,6 +180,77 @@ def _fallback_hashtags(data: HashtagRequest) -> tuple[list[str], list[str]]:
     trending = _PLATFORM_TRENDING_TAGS[data.target_platform]
     niche = _dedupe_hashtags(niche_tags or ["#content", "#marketing", "#socialmedia"], data.limit)
     return trending, niche
+
+
+def _normalize_scores(scores: dict[str, float]) -> dict[str, float]:
+    keys = ["professional", "casual", "fun"]
+    cleaned = {key: max(0.0, min(1.0, float(scores.get(key, 0.0)))) for key in keys}
+    total = sum(cleaned.values())
+    if total <= 0:
+        return {"professional": 0.34, "casual": 0.33, "fun": 0.33}
+    return {key: round(value / total, 3) for key, value in cleaned.items()}
+
+
+def _dominant_tone(scores: dict[str, float]) -> Literal["professional", "casual", "fun", "mixed"]:
+    ordered = sorted(scores.items(), key=lambda item: item[1], reverse=True)
+    if len(ordered) > 1 and ordered[0][1] - ordered[1][1] < 0.12:
+        return "mixed"
+    return ordered[0][0]  # type: ignore[return-value]
+
+
+def _fallback_tone(caption: str) -> tuple[dict[str, float], list[str]]:
+    text = caption.lower()
+    words = set(re.findall(r"\w+", text, flags=re.UNICODE))
+
+    professional_words = {
+        "strategy", "report", "analytics", "growth", "business", "service",
+        "solution", "client", "natija", "hisobot", "strategiya", "mijoz",
+    }
+    casual_words = {
+        "today", "quick", "simple", "you", "we", "hello", "thanks",
+        "bugun", "tez", "oddiy", "salom", "rahmat", "siz", "biz",
+    }
+    fun_words = {
+        "wow", "fun", "trend", "viral", "haha", "challenge", "amazing",
+        "zor", "ajoyib", "trend", "kulgu",
+    }
+
+    scores = {
+        "professional": 0.25 + len(words & professional_words) * 0.18,
+        "casual": 0.25 + len(words & casual_words) * 0.16,
+        "fun": 0.25 + len(words & fun_words) * 0.18,
+    }
+    if "!" in caption:
+        scores["fun"] += 0.18
+        scores["casual"] += 0.08
+    if "?" in caption:
+        scores["casual"] += 0.08
+    if len(caption) > 280:
+        scores["professional"] += 0.12
+    if len(caption) < 90:
+        scores["casual"] += 0.08
+
+    normalized = _normalize_scores(scores)
+    tone = _dominant_tone(normalized)
+    suggestions = {
+        "professional": [
+            "Add a clear outcome or metric if the post is business-focused.",
+            "Keep hashtags targeted and avoid slang-heavy phrasing.",
+        ],
+        "casual": [
+            "Add one clear call to action to make the conversational tone useful.",
+            "Keep the first line direct so readers know why to continue.",
+        ],
+        "fun": [
+            "Keep the hook short and energetic.",
+            "Use fewer broad hashtags if the caption already feels playful.",
+        ],
+        "mixed": [
+            "Choose one primary tone before publishing for a sharper message.",
+            "Adjust the first sentence to match the intended audience.",
+        ],
+    }[tone]
+    return normalized, suggestions
 
 
 # ─── Endpoint ─────────────────────────────────────────────────────────────────
@@ -292,5 +377,70 @@ Rules:
         trending=[tag for tag in trending if tag in hashtags],
         niche=[tag for tag in niche if tag in hashtags],
         suggestions=suggestions[:data.limit],
+        source=source,
+    )
+
+
+@router.post("/analyze-tone", response_model=ToneAnalyzeResponse)
+async def analyze_tone(
+    data: ToneAnalyzeRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """V2-AI-003 - analyze whether a post is professional, casual, or fun."""
+    platform_clause = f"Platform: {data.target_platform}" if data.target_platform else "Platform: general"
+    system_prompt = (
+        "You are a social media editor. Return valid JSON only. "
+        "Analyze tone using professional, casual, and fun scores from 0 to 1."
+    )
+    user_prompt = f"""{platform_clause}
+Language: {data.language}
+
+Caption:
+{data.caption}
+
+Return JSON in this exact shape:
+{{
+  "tone": "professional",
+  "scores": {{"professional": 0.7, "casual": 0.2, "fun": 0.1}},
+  "confidence": 0.82,
+  "suggestions": ["short actionable suggestion"]
+}}
+
+Rules:
+- tone must be one of professional, casual, fun, mixed.
+- scores must include professional, casual, fun.
+- confidence must be between 0 and 1.
+- suggestions should be practical and brief."""
+
+    source: Literal["ai", "fallback"] = "ai"
+    try:
+        service = AIService()
+        response = await service.client.messages.create(
+            model=service.haiku,
+            max_tokens=1024,
+            system=system_prompt,
+            messages=[{"role": "user", "content": user_prompt}],
+        )
+        parsed = _parse_json_object(response.content[0].text)
+        scores = _normalize_scores(parsed.get("scores", {}))
+        tone = parsed.get("tone")
+        if tone not in {"professional", "casual", "fun", "mixed"}:
+            tone = _dominant_tone(scores)
+        confidence = max(0.0, min(1.0, float(parsed.get("confidence", max(scores.values())))))
+        suggestions = parsed.get("suggestions", [])
+        if not isinstance(suggestions, list):
+            suggestions = []
+    except Exception as e:
+        logger.warning("Tone AI analysis failed, using fallback: %s", e)
+        source = "fallback"
+        scores, suggestions = _fallback_tone(data.caption)
+        tone = _dominant_tone(scores)
+        confidence = max(scores.values())
+
+    return ToneAnalyzeResponse(
+        tone=tone,
+        scores=scores,
+        confidence=round(confidence, 3),
+        suggestions=[str(item)[:180] for item in suggestions[:4]],
         source=source,
     )

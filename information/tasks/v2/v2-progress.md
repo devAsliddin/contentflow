@@ -14,7 +14,7 @@ Last updated: 2026-05-12
 | V2-ANA-004 | Weekly auto PDF report | Backend Agent | ⬜ Pending | — |
 | V2-ANA-005 | Best posting time AI analysis | Backend Agent | ⬜ Pending | — |
 | V2-AI-002 | Hashtag Suggester | Backend Agent | Done | 2026-05-12 |
-| V2-AI-003 | Post tone analyzer | Backend Agent | ⬜ Pending | — |
+| V2-AI-003 | Post tone analyzer | Backend Agent | Done | 2026-05-12 |
 | V2-AI-004 | Weekly content plan v2 | Backend Agent | ⬜ Pending | — |
 | V2-AI-005 | A/B caption variant generator | Backend Agent | ⬜ Pending | — |
 | V2-WF-001 | Draft Queue | Backend+Frontend | ⬜ Pending | — |
@@ -39,6 +39,6 @@ Last updated: 2026-05-12
 ---
 
 **Total:** 31 tasks
-**Done:** 8
+**Done:** 9
 **In Progress:** 0
-**Pending:** 23
+**Pending:** 22

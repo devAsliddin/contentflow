@@ -116,6 +116,24 @@ export interface HashtagResponse {
   source: 'ai' | 'fallback'
 }
 
+export interface ToneAnalyzeRequest {
+  caption: string
+  target_platform?: 'instagram' | 'tiktok' | 'telegram' | null
+  language?: string
+}
+
+export interface ToneAnalyzeResponse {
+  tone: 'professional' | 'casual' | 'fun' | 'mixed'
+  scores: {
+    professional: number
+    casual: number
+    fun: number
+  }
+  confidence: number
+  suggestions: string[]
+  source: 'ai' | 'fallback'
+}
+
 // V2 analytics types
 
 export interface PlatformDayCount {

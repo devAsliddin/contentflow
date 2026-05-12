@@ -83,3 +83,12 @@ _(entries added after each task completes)_
 - **Resilience:** uses Claude for hashtag strategy when available, with a deterministic fallback generator if the AI request or JSON parsing fails.
 - **Modified:** `frontend/src/services/ai.service.ts` - added `suggestHashtags(payload)` using the V2 AI base URL.
 - **Modified:** `frontend/src/types/api.types.ts` - added hashtag request/response types.
+
+---
+
+### [V2-AI-003] Post tone analyzer
+- **Modified:** `backend/app/routers/ai_v2.py` - added `POST /api/v2/ai/analyze-tone`.
+- **Behavior:** returns dominant tone (`professional`, `casual`, `fun`, or `mixed`), normalized tone scores, confidence, suggestions, and source.
+- **Resilience:** uses Claude for editorial tone analysis when available, with a deterministic lexical fallback if AI is unavailable.
+- **Modified:** `frontend/src/services/ai.service.ts` - added `analyzeTone(payload)`.
+- **Modified:** `frontend/src/types/api.types.ts` - added tone analyzer request/response types.
