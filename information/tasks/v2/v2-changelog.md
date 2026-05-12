@@ -74,3 +74,12 @@ _(entries added after each task completes)_
   - `GET /api/v2/analytics/platforms` - alias for the platform comparison endpoint required by the task list.
 - **Modified:** `frontend/src/services/analytics.service.ts` - normalizes V2 analytics envelopes into dashboard-ready arrays and adds `getFollowerGrowth(days?)`.
 - **Modified:** `frontend/src/types/api.types.ts` - added follower growth response types.
+
+---
+
+### [V2-AI-002] Hashtag Suggester
+- **Modified:** `backend/app/routers/ai_v2.py` - added `POST /api/v2/ai/hashtags`.
+- **Behavior:** returns combined `hashtags`, separate `trending` and `niche` lists, scored suggestions, platform, and source.
+- **Resilience:** uses Claude for hashtag strategy when available, with a deterministic fallback generator if the AI request or JSON parsing fails.
+- **Modified:** `frontend/src/services/ai.service.ts` - added `suggestHashtags(payload)` using the V2 AI base URL.
+- **Modified:** `frontend/src/types/api.types.ts` - added hashtag request/response types.

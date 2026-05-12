@@ -92,6 +92,30 @@ export interface IdeasResponse {
   ideas: PostIdea[]
 }
 
+export interface HashtagRequest {
+  caption?: string | null
+  topic?: string | null
+  target_platform: 'instagram' | 'tiktok' | 'telegram'
+  niche?: string | null
+  language?: string
+  limit?: number
+}
+
+export interface HashtagSuggestion {
+  tag: string
+  kind: 'trending' | 'niche'
+  score: number
+}
+
+export interface HashtagResponse {
+  platform: string
+  hashtags: string[]
+  trending: string[]
+  niche: string[]
+  suggestions: HashtagSuggestion[]
+  source: 'ai' | 'fallback'
+}
+
 // V2 analytics types
 
 export interface PlatformDayCount {

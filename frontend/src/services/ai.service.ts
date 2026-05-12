@@ -1,9 +1,15 @@
+import axios from 'axios'
 import { api } from './api'
 import type {
   GeneratePlanRequest, WeeklyPlan,
   GenerateCaptionRequest, CaptionResponse,
+  HashtagRequest, HashtagResponse,
   IdeasResponse,
 } from '@/types/api.types'
+
+function getV2BaseUrl() {
+  return (import.meta.env.VITE_API_URL || '/api/v1').replace('/v1', '/v2')
+}
 
 export const aiService = {
   async generatePlan(payload: GeneratePlanRequest): Promise<WeeklyPlan> {
@@ -18,6 +24,19 @@ export const aiService = {
 
   async suggestIdeas(): Promise<IdeasResponse> {
     const { data } = await api.post<IdeasResponse>('/ai/suggest-ideas')
+    return data
+  },
+
+  async suggestHashtags(payload: HashtagRequest): Promise<HashtagResponse> {
+    const BASE_URL = getV2BaseUrl()
+    const token = localStorage.getItem('access_token')
+    const { data } = await axios.post<HashtagResponse>(
+      `${BASE_URL}/ai/hashtags`,
+      payload,
+      {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      }
+    )
     return data
   },
 }

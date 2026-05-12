@@ -17,7 +17,7 @@
 ## AI Assistant (AI)
 
 - [x] **V2-AI-001** [Backend] — Caption Rewriter: takes caption + target platform, rewrites for that platform's style/limits. Endpoint: `POST /api/v2/ai/rewrite-caption`
-- [ ] **V2-AI-002** [Backend] — Hashtag Suggester: trending + niche hashtags based on caption/topic. Endpoint: `POST /api/v2/ai/hashtags`
+- [x] **V2-AI-002** [Backend] — Hashtag Suggester: trending + niche hashtags based on caption/topic. Endpoint: `POST /api/v2/ai/hashtags`
 - [ ] **V2-AI-003** [Backend] — Post tone analyzer: returns tone score (professional/casual/fun). Endpoint: `POST /api/v2/ai/analyze-tone`
 - [ ] **V2-AI-004** [Backend] — Weekly content plan generator v2: improved prompt, includes hashtags + best time suggestions. Endpoint: `POST /api/v2/ai/generate-plan`
 - [ ] **V2-AI-005** [Backend] — A/B caption variant generator: returns 2-3 caption variants for testing. Endpoint: `POST /api/v2/ai/ab-captions`
