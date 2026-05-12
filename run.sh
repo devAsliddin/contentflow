@@ -10,22 +10,24 @@ FRONTEND="$ROOT/frontend"
 LOG_DIR="$ROOT/.logs"
 PID_FILE="$ROOT/.run.pids"
 
-# ── Tool paths (Windows portable installs take priority) ─────────────
+# ── Tool paths ────────────────────────────────────────────────────────
 REDIS_SERVER="/c/tools/redis/redis-server.exe"
 REDIS_CLI="/c/tools/redis/redis-cli.exe"
-PGDIR="/c/tools/pgsql"
-PGDATA="C:/tools/pgdata"
+
+# PostgreSQL 17 moved to D:
+PGDIR="/d/PostgreSQL/17"
+PGDATA="D:/PostgreSQL/17/data"
 
 # Fall back to system PATH if not found at Windows paths
-command -v redis-cli   &>/dev/null && REDIS_CLI="redis-cli"
+command -v redis-cli    &>/dev/null && REDIS_CLI="redis-cli"
 command -v redis-server &>/dev/null && REDIS_SERVER="redis-server"
-[ -f "$REDIS_CLI" ]    || REDIS_CLI="redis-cli"
-[ -f "$REDIS_SERVER" ] || REDIS_SERVER="redis-server"
+[ -f "$REDIS_CLI" ]     || REDIS_CLI="redis-cli"
+[ -f "$REDIS_SERVER" ]  || REDIS_SERVER="redis-server"
 
 PSQL="$PGDIR/bin/psql.exe"
 PG_CTL="$PGDIR/bin/pg_ctl.exe"
-command -v psql &>/dev/null && PSQL="psql"
-command -v pg_ctl &>/dev/null && PG_CTL="pg_ctl"
+command -v psql    &>/dev/null && PSQL="psql"
+command -v pg_ctl  &>/dev/null && PG_CTL="pg_ctl"
 
 # ── On Windows use Scripts/, on Unix use bin/ ────────────────────────
 if [ -d "$BACKEND/venv/Scripts" ]; then
@@ -92,30 +94,36 @@ fi
 
 # ── 2. PostgreSQL ─────────────────────────────────────────────────────
 log "Checking PostgreSQL..."
-if PGPASSWORD=contentflow123 "$PSQL" -U postgres -h localhost -c "SELECT 1" &>/dev/null 2>&1; then
+pg_ping() {
+  PGPASSWORD=contentflow123 "$PSQL" -U contentflow -d contentflow -h localhost -c "SELECT 1" &>/dev/null 2>&1
+}
+
+if pg_ping; then
   ok "PostgreSQL already running"
 else
   log "Starting PostgreSQL..."
-  if [ -f "$PG_CTL" ]; then
+  # Try Windows service first
+  if sc query postgresql-x64-17 2>/dev/null | grep -q "RUNNING"; then
+    ok "PostgreSQL service running"
+  elif [ -f "$PG_CTL" ]; then
     "$PG_CTL" -D "$PGDATA" -l "$LOG_DIR/postgres.log" start > /dev/null 2>&1
     sleep 2
-    PGPASSWORD=contentflow123 "$PSQL" -U postgres -h localhost -c "SELECT 1" &>/dev/null 2>&1 \
-      && ok "PostgreSQL started" \
+    pg_ping && ok "PostgreSQL started" \
       || { err "PostgreSQL failed — check $LOG_DIR/postgres.log"; exit 1; }
   else
-    err "PostgreSQL not found. Install from https://www.postgresql.org/download/"
+    err "PostgreSQL not found at $PGDIR"
+    err "Install: winget install PostgreSQL.PostgreSQL.17"
     exit 1
   fi
-fi
 
-# Ensure database exists
-PGPASSWORD=contentflow123 "$PSQL" -U postgres -h localhost -tc \
-  "SELECT 1 FROM pg_database WHERE datname='contentflow'" 2>/dev/null \
-  | grep -q 1 || {
-    log "Creating database 'contentflow'..."
-    PGPASSWORD=contentflow123 "$PSQL" -U postgres -h localhost -c "CREATE DATABASE contentflow;" > /dev/null
-    ok "Database created"
-  }
+  # Wait for connection after service start
+  for i in 1 2 3 4 5; do
+    pg_ping && break
+    sleep 1
+  done
+  pg_ping || { err "Cannot connect to PostgreSQL"; exit 1; }
+  ok "PostgreSQL ready"
+fi
 
 # ── 3. Python venv ────────────────────────────────────────────────────
 if [ ! -d "$BACKEND/venv" ]; then

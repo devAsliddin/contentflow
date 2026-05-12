@@ -64,3 +64,4 @@ htmlcov/
 *.cert
 *.crt
 secrets/
+.gstack/

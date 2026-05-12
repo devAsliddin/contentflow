@@ -6,12 +6,20 @@ import NewPostPage from '@/pages/NewPostPage'
 import AccountsPage from '@/pages/AccountsPage'
 import CalendarPage from '@/pages/CalendarPage'
 import AiPlanPage from '@/pages/AiPlanPage'
+import AdminPage from '@/pages/AdminPage'
 import LoginPage from '@/pages/LoginPage'
 import RegisterPage from '@/pages/RegisterPage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   if (!isAuthenticated) return <Navigate to="/login" replace />
+  return <>{children}</>
+}
+
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const user = useAuthStore((s) => s.user)
+  if (!user) return <Navigate to="/login" replace />
+  if (!user.is_admin) return <Navigate to="/" replace />
   return <>{children}</>
 }
 
@@ -34,6 +42,14 @@ export default function App() {
           <Route path="accounts" element={<AccountsPage />} />
           <Route path="calendar" element={<CalendarPage />} />
           <Route path="ai-plan" element={<AiPlanPage />} />
+          <Route
+            path="admin"
+            element={
+              <AdminRoute>
+                <AdminPage />
+              </AdminRoute>
+            }
+          />
         </Route>
       </Routes>
     </BrowserRouter>

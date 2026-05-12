@@ -10,67 +10,169 @@
     --card-foreground: 213 31% 91%;
     --border: 216 34% 17%;
     --input: 216 34% 17%;
-    --primary: 210 100% 56%;
+    --primary: 246 100% 69%;
     --primary-foreground: 224 71% 4%;
     --secondary: 222 47% 11%;
     --secondary-foreground: 213 31% 91%;
     --muted: 222 47% 11%;
     --muted-foreground: 215.4 16.3% 56.9%;
     --accent: 216 34% 17%;
-    --accent-foreground: 210 100% 56%;
+    --accent-foreground: 246 100% 69%;
     --destructive: 0 63% 31%;
     --destructive-foreground: 210 40% 98%;
-    --ring: 210 100% 56%;
+    --ring: 246 100% 69%;
     --radius: 0.75rem;
   }
-}
 
-@layer base {
-  * {
-    @apply border-border;
+  html, body {
+    background: #0D0D0F;
+    color: #E9E9F0;
+    font-family: "DM Sans", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
 
-  body {
-    @apply bg-background text-foreground;
-    font-feature-settings: "rlig" 1, "calt" 1;
+  ::selection {
+    background: #6C63FF;
+    color: #fff;
   }
 
-  ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-
-  ::-webkit-scrollbar-track {
-    @apply bg-background;
-  }
-
-  ::-webkit-scrollbar-thumb {
-    @apply bg-border rounded-full;
-  }
-
-  ::-webkit-scrollbar-thumb:hover {
-    @apply bg-muted-foreground;
-  }
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #2A2A35; border-radius: 999px; border: 2px solid #0D0D0F; }
+  ::-webkit-scrollbar-thumb:hover { background: #3A3A48; }
 }
 
 @layer components {
-  .platform-instagram {
-    --platform-color: #E1306C;
+  /* Ambient grain + dot field */
+  .grain::before {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background-image: radial-gradient(rgba(255,255,255,0.025) 1px, transparent 1px);
+    background-size: 24px 24px;
+    mask-image: radial-gradient(ellipse at 30% 0%, black 30%, transparent 70%);
   }
-  .platform-tiktok {
-    --platform-color: #69C9D0;
-  }
-  .platform-telegram {
-    --platform-color: #229ED9;
+  .grain::after {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background: radial-gradient(800px 500px at 85% -10%, rgba(108,99,255,0.10), transparent 60%),
+                radial-gradient(700px 500px at -10% 90%, rgba(0,245,160,0.06), transparent 60%);
   }
 
-  .glow-instagram {
-    box-shadow: 0 0 20px rgba(225, 48, 108, 0.3);
+  /* Card hover lift */
+  .lift {
+    transition: transform .28s cubic-bezier(.2,.7,.2,1), box-shadow .28s, border-color .28s, background-color .28s;
   }
-  .glow-tiktok {
-    box-shadow: 0 0 20px rgba(105, 201, 208, 0.3);
+  .lift:hover { transform: translateY(-2px); }
+
+  /* Subtle hairline */
+  .hr {
+    background: linear-gradient(90deg, transparent, #2A2A35 20%, #2A2A35 80%, transparent);
+    height: 1px;
   }
-  .glow-telegram {
-    box-shadow: 0 0 20px rgba(34, 158, 217, 0.3);
+
+  /* Number tabular */
+  .tnum { font-variant-numeric: tabular-nums; }
+
+  /* Soft gradient text */
+  .text-grad-indigo {
+    background: linear-gradient(180deg, #fff 0%, #b9b4ff 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
   }
+  .text-grad-mint {
+    background: linear-gradient(180deg, #c8ffe8 0%, #00F5A0 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Focus ring */
+  .ring-focus:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px #0D0D0F, 0 0 0 4px #6C63FF;
+  }
+
+  /* Animated dashed border (upload zone) */
+  .marching {
+    background-image:
+      linear-gradient(90deg, #3A3A48 50%, transparent 50%),
+      linear-gradient(90deg, #3A3A48 50%, transparent 50%),
+      linear-gradient(0deg, #3A3A48 50%, transparent 50%),
+      linear-gradient(0deg, #3A3A48 50%, transparent 50%);
+    background-position: 0 0, 0 100%, 0 0, 100% 0;
+    background-repeat: repeat-x, repeat-x, repeat-y, repeat-y;
+    background-size: 12px 1px, 12px 1px, 1px 12px, 1px 12px;
+    animation: march 0.8s linear infinite;
+  }
+  .marching.active {
+    background-image:
+      linear-gradient(90deg, #6C63FF 50%, transparent 50%),
+      linear-gradient(90deg, #6C63FF 50%, transparent 50%),
+      linear-gradient(0deg, #6C63FF 50%, transparent 50%),
+      linear-gradient(0deg, #6C63FF 50%, transparent 50%);
+  }
+}
+
+@layer utilities {
+  /* Status dot pulse */
+  .dot-pulse { animation: pulse-dot 1.8s ease-out infinite; }
+
+  /* Shimmer loading */
+  .shimmer {
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent);
+    background-size: 200% 100%;
+    animation: shimmer 2.6s linear infinite;
+  }
+
+  /* Page transition */
+  .page-in { animation: pagein 360ms cubic-bezier(.2,.7,.2,1) both; }
+
+  /* Drawer slide-in */
+  .drawer-in { animation: drawerin 380ms cubic-bezier(.2,.7,.2,1) both; }
+  .mask-in { animation: maskfade 220ms ease both; }
+
+  /* Slow gradient orbit (AI panel) */
+  .orbit {
+    background: linear-gradient(120deg, rgba(108,99,255,0.18), rgba(0,245,160,0.10), rgba(255,179,71,0.12), rgba(108,99,255,0.18));
+    background-size: 300% 300%;
+    animation: orbit 14s ease infinite;
+  }
+
+  /* Sparkline path draw */
+  .spark path { stroke-dasharray: 600; animation: drawline 1.6s ease-out both; }
+}
+
+/* Keyframes */
+@keyframes pulse-dot {
+  0%, 100% { box-shadow: 0 0 0 0 var(--dot, rgba(0,245,160,0.6)); }
+  50%       { box-shadow: 0 0 0 6px transparent; }
+}
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes march {
+  to { background-position: 24px 0, -24px 0, 0 24px, 0 -24px; }
+}
+@keyframes pagein {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes orbit {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+@keyframes drawline {
+  from { stroke-dashoffset: 600; }
+  to   { stroke-dashoffset: 0; }
+}
+@keyframes drawerin {
+  from { transform: translateX(100%); opacity: 0.4; }
+  to   { transform: translateX(0); opacity: 1; }
+}
+@keyframes maskfade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }

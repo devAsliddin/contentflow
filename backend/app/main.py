@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
 from app.database import engine, Base
-from app.routers import auth, posts, accounts, ai_plan, scheduler, analytics, upload
+from app.routers import auth, posts, accounts, ai_plan, scheduler, analytics, upload, admin
 
 settings = get_settings()
 
@@ -56,6 +56,7 @@ app.include_router(ai_plan.router, prefix="/api/v1/ai", tags=["ai"])
 app.include_router(scheduler.router, prefix="/api/v1/scheduler", tags=["scheduler"])
 app.include_router(analytics.router, prefix="/api/v1/analytics", tags=["analytics"])
 app.include_router(upload.router, prefix="/api/v1/upload", tags=["upload"])
+app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
 
 # Serve uploaded media
 media_path = Path(settings.media_dir)

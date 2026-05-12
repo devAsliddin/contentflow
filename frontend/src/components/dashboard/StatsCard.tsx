@@ -1,62 +1,54 @@
-import { LucideIcon } from 'lucide-react'
-import { cn } from '@/utils/cn'
-import { AreaChart, Area, ResponsiveContainer, Tooltip } from 'recharts'
+import { TrendingUp, TrendingDown } from 'lucide-react'
+import Sparkline from '@/components/ui/Sparkline'
 
-interface StatsCardProps {
-  title: string
-  value: number | string
-  icon: LucideIcon
+interface Props {
+  label: string
+  value: string | number
+  delta?: string
+  deltaKind?: 'up' | 'down'
+  sparkValues?: number[]
+  sparkColor?: string
+  sparkFill?: string
+  // legacy props (ignored)
+  title?: string
+  icon?: any
   trend?: number[]
   color?: string
-  subtitle?: string
 }
 
-export default function StatsCard({ title, value, icon: Icon, trend, color = '#3B82F6', subtitle }: StatsCardProps) {
-  const trendData = trend?.map((v, i) => ({ i, v })) || []
-
+export default function StatsCard({
+  label,
+  value,
+  delta,
+  deltaKind = 'up',
+  sparkValues,
+  sparkColor = '#6C63FF',
+  sparkFill = 'rgba(108,99,255,0.18)',
+}: Props) {
+  const deltaColor = deltaKind === 'up' ? '#00F5A0' : '#FF5C8A'
   return (
-    <div className="bg-card border border-border rounded-2xl p-5 flex flex-col gap-4">
-      <div className="flex items-center justify-between">
+    <div className="lift relative rounded-2xl bg-surface border border-line p-5 overflow-hidden shadow-card">
+      <div
+        className="absolute -right-6 -top-6 w-24 h-24 rounded-full blur-2xl opacity-30"
+        style={{ background: sparkColor }}
+      />
+      <div className="relative flex items-start justify-between">
         <div>
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{title}</p>
-          <p className="text-3xl font-bold text-foreground mt-1">{value}</p>
-          {subtitle && <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>}
+          <div className="text-[11px] uppercase tracking-[0.14em] text-mute font-medium">{label}</div>
+          <div className="mt-3 flex items-baseline gap-2">
+            <div className="font-display text-3xl text-ink tnum tracking-tight">{value}</div>
+            {delta && (
+              <div className="flex items-center gap-1 text-xs tnum font-medium" style={{ color: deltaColor }}>
+                {deltaKind === 'up' ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                {delta}
+              </div>
+            )}
+          </div>
         </div>
-        <div
-          className="flex items-center justify-center w-11 h-11 rounded-xl"
-          style={{ backgroundColor: `${color}20` }}
-        >
-          <Icon size={22} style={{ color }} />
-        </div>
+        {sparkValues && (
+          <Sparkline values={sparkValues} color={sparkColor} fill={sparkFill} w={92} h={36} />
+        )}
       </div>
-
-      {trendData.length > 0 && (
-        <div className="h-12">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={trendData} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
-              <defs>
-                <linearGradient id={`grad-${title}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={color} stopOpacity={0.3} />
-                  <stop offset="95%" stopColor={color} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <Area
-                type="monotone"
-                dataKey="v"
-                stroke={color}
-                strokeWidth={2}
-                fill={`url(#grad-${title})`}
-                dot={false}
-              />
-              <Tooltip
-                contentStyle={{ background: 'hsl(224 71% 6%)', border: '1px solid hsl(216 34% 17%)', borderRadius: 8, fontSize: 12 }}
-                itemStyle={{ color: 'hsl(213 31% 91%)' }}
-                labelFormatter={() => ''}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      )}
     </div>
   )
 }
