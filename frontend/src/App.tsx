@@ -6,6 +6,8 @@ import NewPostPage from '@/pages/NewPostPage'
 import AccountsPage from '@/pages/AccountsPage'
 import CalendarPage from '@/pages/CalendarPage'
 import AiPlanPage from '@/pages/AiPlanPage'
+import AnalyticsPage from '@/pages/AnalyticsPage'
+import SettingsPage from '@/pages/SettingsPage'
 import AdminPage from '@/pages/AdminPage'
 import LoginPage from '@/pages/LoginPage'
 import RegisterPage from '@/pages/RegisterPage'
@@ -42,6 +44,8 @@ export default function App() {
           <Route path="accounts" element={<AccountsPage />} />
           <Route path="calendar" element={<CalendarPage />} />
           <Route path="ai-plan" element={<AiPlanPage />} />
+          <Route path="analytics" element={<AnalyticsPage />} />
+          <Route path="settings" element={<SettingsPage />} />
           <Route
             path="admin"
             element={

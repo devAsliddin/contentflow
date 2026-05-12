@@ -55,16 +55,21 @@ api.interceptors.response.use(
 
       try {
         const resp = await axios.post(`${BASE_URL}/auth/refresh`, { refresh_token: refreshToken })
-        const { access_token, refresh_token } = resp.data
+        const { access_token, refresh_token, user } = resp.data
         localStorage.setItem('access_token', access_token)
         localStorage.setItem('refresh_token', refresh_token)
         api.defaults.headers.common.Authorization = `Bearer ${access_token}`
+        // Keep Zustand store in sync with refreshed tokens
+        const { useAuthStore } = await import('@/store')
+        useAuthStore.getState().setTokens(access_token, refresh_token, user)
         processQueue(null, access_token)
         originalRequest.headers.Authorization = `Bearer ${access_token}`
         return api(originalRequest)
       } catch (err) {
         processQueue(err, null)
         localStorage.clear()
+        const { useAuthStore } = await import('@/store')
+        useAuthStore.getState().logout()
         window.location.href = '/login'
         return Promise.reject(err)
       } finally {

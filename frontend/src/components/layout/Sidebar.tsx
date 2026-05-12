@@ -2,8 +2,9 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, PlusCircle, CalendarDays, UsersRound,
   Sparkles, LineChart, Settings2, PanelLeftClose, PanelLeftOpen,
-  ChevronUp, ShieldCheck,
+  ChevronUp, ShieldCheck, LogOut,
 } from 'lucide-react'
+import { useState } from 'react'
 import { useAuthStore } from '@/store'
 import Avatar from '@/components/ui/Avatar'
 
@@ -55,7 +56,15 @@ function Logo({ collapsed }: { collapsed: boolean }) {
 
 export default function Sidebar({ collapsed, setCollapsed }: Props) {
   const user = useAuthStore((s) => s.user)
+  const logout = useAuthStore((s) => s.logout)
   const location = useLocation()
+  const navigate = useNavigate()
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
+
+  function handleLogout() {
+    logout()
+    navigate('/login')
+  }
 
   const isActive = (to: string, exact?: boolean) =>
     exact ? location.pathname === to : location.pathname.startsWith(to)
@@ -199,23 +208,49 @@ export default function Sidebar({ collapsed, setCollapsed }: Props) {
       )}
 
       {/* User row */}
-      <div className="p-3 border-t border-line flex items-center gap-3">
-        <Avatar
-          name={user?.full_name || user?.email || 'User'}
-          size={collapsed ? 32 : 36}
-          hue={250}
-        />
-        {!collapsed && (
-          <>
-            <div className="flex-1 min-w-0">
-              <div className="text-sm text-ink truncate">{user?.full_name || 'User'}</div>
-              <div className="text-[11px] text-faint truncate">Creator · Pro plan</div>
-            </div>
-            <button className="p-1.5 rounded-md text-faint hover:text-ink hover:bg-surface transition">
-              <ChevronUp size={14} />
+      <div className="p-3 border-t border-line relative">
+        {/* Logout dropdown */}
+        {userMenuOpen && !collapsed && (
+          <div className="absolute bottom-full left-3 right-3 mb-1 bg-surface border border-line rounded-xl shadow-card overflow-hidden z-50">
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-rose-400 hover:bg-rose-500/10 transition"
+            >
+              <LogOut size={14} />
+              Sign out
             </button>
-          </>
+          </div>
         )}
+        <div className="flex items-center gap-3">
+          <Avatar
+            name={user?.full_name || user?.email || 'User'}
+            size={collapsed ? 32 : 36}
+            hue={250}
+          />
+          {!collapsed && (
+            <>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm text-ink truncate">{user?.full_name || 'User'}</div>
+                <div className="text-[11px] text-faint truncate">{user?.email || ''}</div>
+              </div>
+              <button
+                onClick={() => setUserMenuOpen((v) => !v)}
+                className="p-1.5 rounded-md text-faint hover:text-ink hover:bg-surface transition"
+              >
+                <ChevronUp size={14} className={userMenuOpen ? 'rotate-180 transition-transform' : 'transition-transform'} />
+              </button>
+            </>
+          )}
+          {collapsed && (
+            <button
+              onClick={handleLogout}
+              className="p-1.5 rounded-md text-faint hover:text-rose-400 hover:bg-surface transition"
+              title="Sign out"
+            >
+              <LogOut size={14} />
+            </button>
+          )}
+        </div>
       </div>
     </aside>
   )
