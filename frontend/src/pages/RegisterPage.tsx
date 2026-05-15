@@ -21,9 +21,13 @@ export default function RegisterPage() {
     setLoading(true)
     try {
       await register(email, password, fullName)
-      navigate('/')
+      navigate('/dashboard')
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || 'Registration failed')
+      const detail = err?.response?.data?.detail
+      const message = Array.isArray(detail)
+        ? detail.map((d: any) => d.msg).join(', ')
+        : detail || 'Registration failed'
+      toast.error(message)
     } finally {
       setLoading(false)
     }

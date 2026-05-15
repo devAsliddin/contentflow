@@ -2,28 +2,39 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, PlusCircle, CalendarDays, UsersRound,
   Sparkles, LineChart, Settings2, PanelLeftClose, PanelLeftOpen,
-  ChevronUp, ShieldCheck, LogOut,
+  ChevronUp, ShieldCheck, LogOut, FileEdit, ClipboardCheck, Layers,
+  ChevronDown, X,
 } from 'lucide-react'
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '@/store'
 import Avatar from '@/components/ui/Avatar'
+import PlatformChip, { type PlatformKind } from '@/components/ui/PlatformChip'
+import { accountsService } from '@/services/accounts.service'
 
 const NAV_TOP = [
-  { to: '/',         label: 'Dashboard', icon: LayoutDashboard, exact: true },
-  { to: '/new-post', label: 'New Post',  icon: PlusCircle,      kbd: '⌘N' },
-  { to: '/calendar', label: 'Calendar',  icon: CalendarDays },
-  { to: '/accounts', label: 'Accounts',  icon: UsersRound },
-  { to: '/ai-plan',  label: 'AI Plan',   icon: Sparkles },
+  { to: '/dashboard',           label: 'Dashboard', icon: LayoutDashboard, exact: true },
+  { to: '/dashboard/new-post',  label: 'New Post',  icon: PlusCircle,      kbd: '⌘N' },
+  { to: '/dashboard/calendar',  label: 'Calendar',  icon: CalendarDays },
+  { to: '/dashboard/accounts',  label: 'Accounts',  icon: UsersRound },
+  { to: '/dashboard/ai-plan',   label: 'AI Plan',   icon: Sparkles },
+]
+
+const NAV_WORKFLOW = [
+  { to: '/dashboard/drafts',    label: 'Drafts',    icon: FileEdit },
+  { to: '/dashboard/approval',  label: 'Approval',  icon: ClipboardCheck },
+  { to: '/dashboard/templates', label: 'Templates', icon: Layers },
 ]
 
 const NAV_BOTTOM = [
-  { to: '/analytics', label: 'Analytics', icon: LineChart },
-  { to: '/settings',  label: 'Settings',  icon: Settings2 },
+  { to: '/dashboard/analytics', label: 'Analytics', icon: LineChart },
+  { to: '/dashboard/settings',  label: 'Settings',  icon: Settings2 },
 ]
 
 interface Props {
   collapsed: boolean
   setCollapsed: (v: boolean) => void
+  onMobileClose?: () => void
 }
 
 function Logo({ collapsed }: { collapsed: boolean }) {
@@ -54,12 +65,26 @@ function Logo({ collapsed }: { collapsed: boolean }) {
   )
 }
 
-export default function Sidebar({ collapsed, setCollapsed }: Props) {
+export default function Sidebar({ collapsed, setCollapsed, onMobileClose }: Props) {
   const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
   const location = useLocation()
   const navigate = useNavigate()
   const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const [accountSwitcherOpen, setAccountSwitcherOpen] = useState(false)
+
+  // V2-UI-002: Load connected accounts for account switcher
+  const { data: accounts = [] } = useQuery({
+    queryKey: ['accounts'],
+    queryFn: () => accountsService.list(),
+  })
+
+  // Group accounts by platform
+  const accountGroups: Record<string, typeof accounts> = {}
+  for (const acc of accounts) {
+    if (!accountGroups[acc.platform]) accountGroups[acc.platform] = []
+    accountGroups[acc.platform].push(acc)
+  }
 
   function handleLogout() {
     logout()
@@ -77,14 +102,25 @@ export default function Sidebar({ collapsed, setCollapsed }: Props) {
       {/* Logo row */}
       <div className="px-4 pt-5 pb-4 flex items-center justify-between">
         <Logo collapsed={collapsed} />
-        {!collapsed && (
-          <button
-            onClick={() => setCollapsed(true)}
-            className="p-1.5 rounded-md text-faint hover:text-ink hover:bg-surface transition"
-          >
-            <PanelLeftClose size={16} />
-          </button>
-        )}
+        <div className="flex items-center gap-1">
+          {/* V2-UI-004: Mobile close button */}
+          {onMobileClose && (
+            <button
+              onClick={onMobileClose}
+              className="p-1.5 rounded-md text-faint hover:text-ink hover:bg-surface transition md:hidden"
+            >
+              <X size={16} />
+            </button>
+          )}
+          {!collapsed && (
+            <button
+              onClick={() => setCollapsed(true)}
+              className="p-1.5 rounded-md text-faint hover:text-ink hover:bg-surface transition hidden md:flex"
+            >
+              <PanelLeftClose size={16} />
+            </button>
+          )}
+        </div>
       </div>
 
       {collapsed && (
@@ -132,6 +168,33 @@ export default function Sidebar({ collapsed, setCollapsed }: Props) {
           )
         })}
 
+        {/* V2-UI-002: Workflow section */}
+        {!collapsed && (
+          <div className="text-[10px] uppercase tracking-[0.18em] text-faint px-2 mb-1 mt-4">Workflow</div>
+        )}
+        {collapsed && <div className="my-2 mx-2 hr" />}
+        {NAV_WORKFLOW.map(({ to, label, icon: Icon }) => {
+          const active = isActive(to)
+          return (
+            <NavLink
+              key={to}
+              to={to}
+              className={`relative group flex items-center gap-3 px-2.5 py-2 rounded-lg text-sm transition
+                ${active ? 'text-ink bg-surface2' : 'text-mute hover:text-ink hover:bg-surface/60'}
+                ${collapsed ? 'justify-center' : ''}`}
+            >
+              {active && (
+                <span
+                  className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-r bg-indigo-500"
+                  style={{ boxShadow: '0 0 12px rgba(108,99,255,0.7)' }}
+                />
+              )}
+              <Icon size={17} className={active ? 'text-indigo-400' : ''} />
+              {!collapsed && <span className="truncate flex-1">{label}</span>}
+            </NavLink>
+          )
+        })}
+
         {!collapsed && (
           <div className="text-[10px] uppercase tracking-[0.18em] text-faint px-2 mb-1 mt-4">Insights</div>
         )}
@@ -139,10 +202,10 @@ export default function Sidebar({ collapsed, setCollapsed }: Props) {
 
         {/* Admin link — visible only to admins */}
         {user?.is_admin && (() => {
-          const active = isActive('/admin')
+          const active = isActive('/dashboard/admin')
           return (
             <NavLink
-              to="/admin"
+              to="/dashboard/admin"
               className={`relative group flex items-center gap-3 px-2.5 py-2 rounded-lg text-sm transition
                 ${active ? 'text-ink bg-surface2' : 'text-mute hover:text-ink hover:bg-surface/60'}
                 ${collapsed ? 'justify-center' : ''}`}
@@ -181,6 +244,43 @@ export default function Sidebar({ collapsed, setCollapsed }: Props) {
           )
         })}
       </nav>
+
+      {/* V2-UI-002: Multi-account switcher */}
+      {!collapsed && accounts.length > 0 && (
+        <div className="mx-3 mb-2">
+          <button
+            onClick={() => setAccountSwitcherOpen((v) => !v)}
+            className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-surface border border-line text-xs text-mute hover:text-ink hover:bg-surface2 transition"
+          >
+            <div className="flex items-center gap-2">
+              <div className="flex -space-x-1">
+                {Object.keys(accountGroups).slice(0, 3).map((plat) => (
+                  <PlatformChip key={plat} kind={plat as PlatformKind} size={14} />
+                ))}
+              </div>
+              <span>{accounts.length} account{accounts.length !== 1 ? 's' : ''}</span>
+            </div>
+            <ChevronDown
+              size={12}
+              className={`transition-transform ${accountSwitcherOpen ? 'rotate-180' : ''}`}
+            />
+          </button>
+          {accountSwitcherOpen && (
+            <div className="mt-1 rounded-xl bg-surface border border-line overflow-hidden">
+              {accounts.map((acc) => (
+                <div
+                  key={acc.id}
+                  className="flex items-center gap-2.5 px-3 py-2 text-xs text-ink hover:bg-surface2 transition border-b border-line last:border-b-0"
+                >
+                  <PlatformChip kind={acc.platform as PlatformKind} size={14} />
+                  <span className="truncate flex-1">{acc.account_name}</span>
+                  <span className={`w-1.5 h-1.5 rounded-full ${acc.is_active ? 'bg-mint-500' : 'bg-faint'}`} />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* AI Credits */}
       {!collapsed && (
