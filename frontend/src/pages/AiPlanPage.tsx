@@ -1,349 +1,357 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
+import { Send, Bot, User, Sparkles, Loader2, AlertCircle, RefreshCw, ChevronDown, Copy, Check } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Sparkles, Loader2, RefreshCw, Shuffle, Check, ArrowRight, Info, ChevronDown, Tag, Repeat } from 'lucide-react'
 import { aiService } from '@/services/ai.service'
-import { postsService } from '@/services/posts.service'
-import PlatformChip, { PLATFORM_META, type PlatformKind } from '@/components/ui/PlatformChip'
-import ImgPlaceholder from '@/components/ui/ImgPlaceholder'
-import type { WeeklyPlan } from '@/types/api.types'
+import { accountsService } from '@/services/accounts.service'
+import PlatformChip, { type PlatformKind } from '@/components/ui/PlatformChip'
 
-const NICHES = ['Fitness', 'Food & Cooking', 'Travel', 'Fashion', 'Technology', 'Business', 'Education', 'Entertainment', 'Health & Wellness', 'Photography', 'Art & Design', 'Music']
-const TONES  = ['casual', 'professional', 'humorous', 'educational', 'inspirational']
-const FREQS  = ['3 / week', '5 / week', 'Daily']
-const PLATFORMS: PlatformKind[] = ['instagram', 'tiktok', 'telegram']
-const DAYS   = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-
-const DAY_COLORS = ['#FF5C8A', '#FFB347', '#5BE8FF', '#6C63FF', '#5BE8FF', '#FF5C8A', '#00F5A0']
-
-function ChipSelect({ label, value, options, onChange, icon: Icon }: {
-  label: string; value: string; options: string[];
-  onChange: (v: string) => void; icon: any
-}) {
-  const [open, setOpen] = useState(false)
-  return (
-    <div className="relative">
-      <div className="text-[10px] uppercase tracking-[0.14em] text-faint mb-1.5">{label}</div>
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg bg-bg border border-line text-sm text-ink hover:border-line2 transition"
-      >
-        <Icon size={13} className="text-mute" />
-        <span className="flex-1 text-left">{value || `Select ${label.toLowerCase()}…`}</span>
-        <ChevronDown size={13} className="text-mute" />
-      </button>
-      {open && (
-        <div className="absolute top-full left-0 right-0 mt-1.5 z-20 rounded-lg bg-surface border border-line shadow-xl p-1 max-h-60 overflow-auto">
-          {options.map((o) => (
-            <button
-              key={o}
-              onClick={() => { onChange(o); setOpen(false) }}
-              className={`w-full text-left px-3 py-1.5 rounded-md text-sm ${o === value ? 'bg-indigo-500/10 text-ink' : 'text-mute hover:text-ink hover:bg-surface2'}`}
-            >
-              {o}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
+interface Message {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
 }
 
-function DistroBar({ kind, count, total }: { kind: PlatformKind; count: number; total: number }) {
-  const p = PLATFORM_META[kind]
-  const pct = total > 0 ? Math.round((count / total) * 100) : 0
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-1.5">
-        <div className="flex items-center gap-2">
-          <PlatformChip kind={kind} size={16} />
-          <span className="text-sm text-ink">{p.label}</span>
+const QUICK_PROMPTS = [
+  'Instagram va Telegram kanalim uchun 1 oylik kontent reja tuzing',
+  'TikTok uchun viral video g\'oyalar bering',
+  'Texnologiya mavzusida haftalik kontent strategiyasi',
+  'Biznes kontent uchun eng yaxshi hashtag\'lar',
+  'Kanalimni qanday o\'stirishim mumkin?',
+  'Telegram post uchun qiziqarli kontent yozing',
+]
+
+function copyToClipboard(text: string) {
+  navigator.clipboard.writeText(text).catch(() => {})
+}
+
+function MessageBubble({ msg }: { msg: Message }) {
+  const isUser = msg.role === 'user'
+  const [copied, setCopied] = useState(false)
+
+  function handleCopy() {
+    copyToClipboard(msg.content)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  // Simple markdown-like rendering: bold, line breaks, code blocks
+  const renderContent = (text: string) => {
+    const lines = text.split('\n')
+    return lines.map((line, i) => {
+      // Code block line
+      if (line.startsWith('```')) return <div key={i} className="h-1" />
+      // Heading-like lines starting with #
+      if (line.startsWith('### ')) return <div key={i} className="font-semibold text-ink mt-3 mb-1">{line.slice(4)}</div>
+      if (line.startsWith('## ')) return <div key={i} className="font-bold text-ink mt-3 mb-1 text-[15px]">{line.slice(3)}</div>
+      if (line.startsWith('# ')) return <div key={i} className="font-bold text-ink mt-3 mb-1 text-[16px]">{line.slice(2)}</div>
+      // Bullet lines
+      if (line.startsWith('- ') || line.startsWith('• ')) {
+        return (
+          <div key={i} className="flex gap-2 my-0.5">
+            <span className="text-indigo-400 shrink-0 mt-0.5">•</span>
+            <span>{renderInline(line.slice(2))}</span>
+          </div>
+        )
+      }
+      // Numbered lines
+      const numMatch = line.match(/^(\d+)\.\s(.+)/)
+      if (numMatch) {
+        return (
+          <div key={i} className="flex gap-2 my-0.5">
+            <span className="text-indigo-400 shrink-0 font-mono text-[12px] mt-0.5">{numMatch[1]}.</span>
+            <span>{renderInline(numMatch[2])}</span>
+          </div>
+        )
+      }
+      // Horizontal rule
+      if (line.trim() === '---') return <hr key={i} className="border-line my-2" />
+      // Empty line
+      if (!line.trim()) return <div key={i} className="h-2" />
+      // Normal line
+      return <div key={i}>{renderInline(line)}</div>
+    })
+  }
+
+  const renderInline = (text: string) => {
+    // Bold **text**
+    const parts = text.split(/(\*\*[^*]+\*\*)/g)
+    return parts.map((part, i) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return <strong key={i} className="font-semibold text-ink">{part.slice(2, -2)}</strong>
+      }
+      return <span key={i}>{part}</span>
+    })
+  }
+
+  if (isUser) {
+    return (
+      <div className="flex gap-3 flex-row-reverse">
+        <div className="w-8 h-8 rounded-xl shrink-0 flex items-center justify-center bg-indigo-500 text-white">
+          <User size={14} />
         </div>
-        <div className="text-xs text-mute tnum">{count} / {total}</div>
+        <div className="max-w-[75%] rounded-2xl rounded-tr-sm px-4 py-3 bg-indigo-500 text-white text-[14px] leading-relaxed">
+          {msg.content}
+        </div>
       </div>
-      <div className="h-1.5 rounded-full bg-line/60 overflow-hidden">
-        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: p.bg }} />
+    )
+  }
+
+  return (
+    <div className="flex gap-3 group">
+      <div className="w-8 h-8 rounded-xl shrink-0 flex items-center justify-center bg-surface2 border border-line">
+        <Bot size={14} className="text-indigo-400" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="rounded-2xl rounded-tl-sm px-4 py-3 bg-surface border border-line text-[14px] leading-relaxed text-ink">
+          {renderContent(msg.content)}
+        </div>
+        <button
+          onClick={handleCopy}
+          className="mt-1 flex items-center gap-1.5 text-[11px] text-faint hover:text-ink transition opacity-0 group-hover:opacity-100"
+        >
+          {copied ? <Check size={11} /> : <Copy size={11} />}
+          {copied ? 'Nusxalandi' : 'Nusxalash'}
+        </button>
       </div>
     </div>
   )
 }
 
 export default function AiPlanPage() {
-  const [strategy, setStrategy] = useState('')
-  const [niche, setNiche]       = useState('')
-  const [freq, setFreq]         = useState('5 / week')
-  const [tone, setTone]         = useState('educational')
-  const [selPlatforms, setSelPlatforms] = useState<PlatformKind[]>(['instagram'])
-  const [plan, setPlan]         = useState<WeeklyPlan | null>(null)
-  const [loading, setLoading]   = useState(false)
-  const [addingAll, setAddingAll] = useState(false)
+  const [messages, setMessages] = useState<Message[]>([])
+  const [input, setInput] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [selectedModel, setSelectedModel] = useState('llama3.2')
+  const [modelDropOpen, setModelDropOpen] = useState(false)
+  const bottomRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
 
-  function togglePlatform(p: PlatformKind) {
-    setSelPlatforms((prev) => prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p])
-  }
+  const { data: modelsData } = useQuery({
+    queryKey: ['ollama-models'],
+    queryFn: () => aiService.listModels(),
+    retry: false,
+    staleTime: 60_000,
+  })
 
-  async function handleGenerate(e: React.FormEvent) {
-    e.preventDefault()
-    if (selPlatforms.length === 0) { toast.error('Select at least one platform'); return }
+  const { data: accounts = [] } = useQuery({
+    queryKey: ['accounts'],
+    queryFn: () => accountsService.list(),
+    staleTime: 30_000,
+  })
+
+  useEffect(() => {
+    if (modelsData?.default) setSelectedModel(modelsData.default)
+  }, [modelsData])
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, loading])
+
+  const ollamaOnline = modelsData?.status === 'ok'
+  const models = modelsData?.models ?? ['llama3.2']
+
+  // Group accounts by platform for display
+  const platformGroups = accounts.reduce<Record<string, typeof accounts>>((acc, a) => {
+    if (!acc[a.platform]) acc[a.platform] = []
+    acc[a.platform].push(a)
+    return acc
+  }, {})
+
+  async function sendMessage(text?: string) {
+    const content = (text ?? input).trim()
+    if (!content || loading) return
+
+    const userMsg: Message = { id: crypto.randomUUID(), role: 'user', content }
+    const updatedMessages = [...messages, userMsg]
+    setMessages(updatedMessages)
+    setInput('')
     setLoading(true)
+
     try {
-      const result = await aiService.generatePlan({
-        niche: niche.toLowerCase(),
-        frequency: freq === 'Daily' ? 7 : freq === '5 / week' ? 5 : 3,
-        tone,
-        platforms: selPlatforms,
-      })
-      setPlan(result)
-      toast.success('Content plan generated')
-    } catch {
-      toast.error('Failed to generate plan. Check your AI configuration.')
+      const history = updatedMessages.map((m) => ({ role: m.role, content: m.content }))
+      const result = await aiService.planChat(history, selectedModel)
+      setMessages((prev) => [
+        ...prev,
+        { id: crypto.randomUUID(), role: 'assistant', content: result.message.content },
+      ])
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail || 'AI javob bermadi'
+      toast.error(detail)
+      setMessages((prev) => [
+        ...prev,
+        { id: crypto.randomUUID(), role: 'assistant', content: `Xato: ${detail}` },
+      ])
     } finally {
       setLoading(false)
+      setTimeout(() => inputRef.current?.focus(), 50)
     }
   }
 
-  async function addAllToQueue() {
-    if (!plan) return
-    setAddingAll(true)
-    let count = 0
-    try {
-      for (const day of plan.days) {
-        for (const post of day.posts) {
-          await postsService.create({
-            caption: `${post.caption_suggestion}\n\n${post.hashtags.map((h) => `#${h}`).join(' ')}`,
-            platforms: [post.platform],
-            scheduled_at: null,
-          })
-          count++
-        }
-      }
-      toast.success(`${count} posts added to drafts`)
-    } catch {
-      toast.error('Some posts failed to add')
-    } finally {
-      setAddingAll(false)
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      sendMessage()
     }
   }
 
   return (
-    <div className="page-in px-8 py-6 max-w-[1280px]">
-      <div className="grid grid-cols-12 gap-6">
-        {/* Form */}
-        <div className="col-span-12 lg:col-span-5">
-          <form onSubmit={handleGenerate} className="rounded-2xl bg-surface border border-line p-6 relative overflow-hidden">
-            <div
-              className="absolute inset-x-0 -top-px h-px"
-              style={{ background: 'linear-gradient(90deg, transparent, rgba(108,99,255,0.6), transparent)' }}
-            />
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-[10px] uppercase tracking-[0.18em] text-indigo-400 font-medium">AI Studio</span>
-            </div>
-            <h2 className="font-display text-2xl text-ink tracking-tight mb-1">Describe your content strategy</h2>
-            <p className="text-sm text-mute mb-4">
-              The more specific, the better the plan. We'll mix formats and platforms based on your niche and audience.
-            </p>
+    <div className="page-in flex flex-col h-[calc(100vh-64px)] max-w-[860px] mx-auto px-4 py-4">
 
-            <div className="relative">
-              <textarea
-                value={strategy}
-                onChange={(e) => setStrategy(e.target.value)}
-                rows={7}
-                className="w-full bg-bg border border-line rounded-xl p-4 text-[14px] text-ink leading-relaxed focus:outline-none focus:border-indigo-500/50 transition resize-none placeholder:text-faint"
-                placeholder="Who are you talking to? What change do you want them to make? What's your point of view?"
-              />
-              <div className="absolute bottom-3 right-3 text-[10px] text-faint font-mono tnum">{strategy.length} / 600</div>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-3 shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center">
+            <Sparkles size={17} className="text-indigo-400" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="font-display text-[18px] text-ink tracking-tight">AI Kontent Menejeri</h1>
+              <span className="text-[10px] uppercase tracking-[0.14em] text-faint border border-line rounded px-2 py-0.5">
+                Ollama · Local
+              </span>
             </div>
-
-            <div className="grid grid-cols-2 gap-3 mt-4">
-              <ChipSelect label="Niche"     value={niche} options={NICHES} onChange={setNiche} icon={Tag}    />
-              <ChipSelect label="Frequency" value={freq}  options={FREQS}  onChange={setFreq}  icon={Repeat} />
-            </div>
-
-            <div className="mt-3">
-              <div className="text-[10px] uppercase tracking-[0.14em] text-faint mb-2">Tone</div>
-              <div className="flex flex-wrap gap-1.5">
-                {TONES.map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setTone(t)}
-                    className={`px-3 py-1.5 rounded-full text-xs capitalize transition ${
-                      tone === t
-                        ? 'bg-indigo-500/15 text-ink border border-indigo-500/40'
-                        : 'bg-bg border border-line text-mute hover:text-ink hover:border-line2'
-                    }`}
-                  >
-                    {t}
-                  </button>
+            {accounts.length > 0 && (
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="text-[11px] text-faint">Platformalar:</span>
+                {Object.keys(platformGroups).map((p) => (
+                  <PlatformChip key={p} kind={p as PlatformKind} size={14} />
                 ))}
+                <span className="text-[11px] text-faint">{accounts.length} ta hisob</span>
               </div>
-            </div>
-
-            <div className="mt-3">
-              <div className="text-[10px] uppercase tracking-[0.14em] text-faint mb-2">Platforms</div>
-              <div className="flex gap-2">
-                {PLATFORMS.map((p) => (
-                  <button
-                    key={p}
-                    type="button"
-                    onClick={() => togglePlatform(p)}
-                    className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs border transition ${
-                      selPlatforms.includes(p)
-                        ? 'bg-surface2 text-ink border-line2'
-                        : 'bg-bg text-mute border-line hover:border-line2'
-                    }`}
-                  >
-                    <PlatformChip kind={p} size={14} />
-                    {PLATFORM_META[p].label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="mt-5 w-full py-3.5 rounded-xl bg-indigo-500 text-white font-medium shadow-glow-indigo hover:bg-indigo-400 transition flex items-center justify-center gap-2 disabled:opacity-70"
-            >
-              {loading
-                ? <Loader2 size={16} className="animate-spin" />
-                : <Sparkles size={16} />}
-              {loading ? 'Generating your plan…' : 'Generate Plan'}
-              {!loading && <ArrowRight size={14} />}
-            </button>
-
-            <div className="mt-4 flex items-center gap-2 text-[11px] text-faint">
-              <Info size={12} />
-              Uses 12 credits · Plans regenerate any time
-            </div>
-          </form>
-
-          {/* AI tips */}
-          <div className="mt-5 rounded-2xl border border-line bg-surface p-5 relative overflow-hidden">
-            <div className="absolute inset-0 orbit opacity-30 pointer-events-none" />
-            <div className="relative">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-faint mb-2">How we think</div>
-              <ul className="space-y-2 text-sm text-ink">
-                <li className="flex gap-2">
-                  <Check size={14} className="text-mint-500 shrink-0 mt-1" />
-                  Balance hooks, depth, and recap formats across the week
-                </li>
-                <li className="flex gap-2">
-                  <Check size={14} className="text-mint-500 shrink-0 mt-1" />
-                  Match each idea to the platform where it lands best
-                </li>
-                <li className="flex gap-2">
-                  <Check size={14} className="text-mint-500 shrink-0 mt-1" />
-                  Leave room for one experiment per week
-                </li>
-              </ul>
-            </div>
+            )}
           </div>
         </div>
 
-        {/* Plan results */}
-        <div className="col-span-12 lg:col-span-7">
-          {!plan ? (
-            <div className="rounded-2xl border border-dashed border-line2/60 p-10 text-center min-h-[420px] flex flex-col items-center justify-center">
-              <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center mb-4">
-                <Sparkles size={22} className="text-indigo-400" />
-              </div>
-              <div className="font-display text-xl text-ink">Your plan will appear here</div>
-              <div className="text-sm text-mute mt-1 max-w-sm">
-                Describe what you want to build and we'll lay out a week of original ideas across your connected accounts.
-              </div>
+        {/* Model selector */}
+        <div className="relative">
+          <button
+            onClick={() => setModelDropOpen((v) => !v)}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface border border-line text-[13px] text-ink hover:bg-surface2 transition"
+          >
+            <div className={`w-1.5 h-1.5 rounded-full ${ollamaOnline ? 'bg-mint-500' : 'bg-rose-500'}`} />
+            <span className="max-w-[130px] truncate">{selectedModel}</span>
+            <ChevronDown size={12} className={`text-faint transition-transform ${modelDropOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {modelDropOpen && (
+            <div className="absolute right-0 top-full mt-1.5 z-20 min-w-[190px] rounded-xl bg-surface border border-line shadow-xl py-1.5">
+              {models.map((m) => (
+                <button
+                  key={m}
+                  onClick={() => { setSelectedModel(m); setModelDropOpen(false) }}
+                  className={`w-full text-left px-3 py-2 text-[13px] transition ${
+                    m === selectedModel ? 'text-ink bg-indigo-500/10' : 'text-mute hover:text-ink hover:bg-surface2'
+                  }`}
+                >
+                  {m}
+                </button>
+              ))}
             </div>
-          ) : (
-            <>
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <div className="text-[10px] uppercase tracking-[0.16em] text-faint">Generated plan</div>
-                  <div className="font-display text-xl text-ink tracking-tight">
-                    {tone} · {niche.toLowerCase() || 'your niche'}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => handleGenerate({ preventDefault: () => {} } as any)}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-surface border border-line text-ink hover:border-line2 hover:bg-surface2 transition"
-                  >
-                    <RefreshCw size={12} /> Regenerate
-                  </button>
-                  <button
-                    onClick={addAllToQueue}
-                    disabled={addingAll}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-mint-500 text-bg hover:bg-mint-400 transition disabled:opacity-50"
-                  >
-                    {addingAll ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
-                    Apply all
-                  </button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-7 gap-2.5">
-                {plan.days.map((day, i) => (
-                  <div
-                    key={day.day}
-                    className="lift rounded-xl bg-surface border border-line p-3 flex flex-col min-h-[200px] relative overflow-hidden"
-                  >
-                    <div
-                      className="absolute inset-x-0 top-0 h-0.5"
-                      style={{ background: DAY_COLORS[i % DAY_COLORS.length] }}
-                    />
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="text-[10px] uppercase tracking-wider text-faint">{day.day}</div>
-                    </div>
-                    {day.posts.map((post, idx) => (
-                      <div key={idx} className="flex-1">
-                        <ImgPlaceholder
-                          label={post.platform || 'post'}
-                          aspect="4 / 3"
-                          hue={(i * 47 + 30) % 360}
-                          className="w-full mb-2"
-                        />
-                        <div className="text-[12.5px] text-ink leading-snug text-balance line-clamp-3">
-                          {post.content_idea}
-                        </div>
-                        <div className="mt-2 flex items-center justify-between">
-                          <PlatformChip kind={post.platform as PlatformKind} size={14} />
-                          <span className="text-[10px] text-faint tnum">{post.best_time}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
-
-              {/* Distribution */}
-              <div className="mt-6 rounded-2xl bg-surface border border-line p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <div className="text-[10px] uppercase tracking-[0.16em] text-faint">Distribution</div>
-                    <div className="font-display text-lg text-ink">
-                      {plan.days.reduce((a, d) => a + d.posts.length, 0)} posts · {selPlatforms.length} platforms
-                    </div>
-                  </div>
-                </div>
-                <div className="grid grid-cols-3 gap-4">
-                  {selPlatforms.map((kind) => {
-                    const count = plan.days.reduce(
-                      (a, d) => a + d.posts.filter((p) => p.platform === kind).length,
-                      0,
-                    )
-                    const total = plan.days.reduce((a, d) => a + d.posts.length, 0)
-                    return <DistroBar key={kind} kind={kind} count={count} total={total} />
-                  })}
-                </div>
-              </div>
-
-              <div className="mt-5 flex items-center gap-3 px-4 py-3 rounded-xl bg-indigo-500/[0.06] border border-indigo-500/20">
-                <Sparkles size={16} className="text-indigo-400 shrink-0" />
-                <div className="text-sm text-ink flex-1">
-                  <span className="text-indigo-400 font-medium">AI note · </span>
-                  Plan generated based on your {tone} tone strategy. Adjust any post before adding to queue.
-                </div>
-              </div>
-            </>
           )}
+        </div>
+      </div>
+
+      {/* Ollama offline warning */}
+      {modelsData && !ollamaOnline && (
+        <div className="mb-3 flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-[13px] text-amber-300 shrink-0">
+          <AlertCircle size={15} className="shrink-0 mt-0.5" />
+          <div>
+            <span className="font-medium">Ollama ishlamayapti.</span>{' '}
+            Terminal oching:{' '}
+            <code className="bg-black/30 rounded px-1.5 py-0.5">ollama serve</code>
+            {' · '}
+            <code className="bg-black/30 rounded px-1.5 py-0.5">ollama pull llama3.2</code>
+          </div>
+        </div>
+      )}
+
+      {/* Chat area */}
+      <div className="flex-1 overflow-y-auto rounded-2xl bg-bg border border-line p-5 space-y-5 min-h-0">
+        {messages.length === 0 && (
+          <div className="flex flex-col items-center justify-center min-h-full text-center py-8">
+            <div
+              className="w-16 h-16 rounded-2xl flex items-center justify-center mb-5"
+              style={{ background: 'linear-gradient(135deg, rgba(108,99,255,0.2), rgba(0,245,160,0.1))', border: '1px solid rgba(108,99,255,0.3)' }}
+            >
+              <Sparkles size={26} className="text-indigo-400" />
+            </div>
+            <h2 className="font-display text-2xl text-ink tracking-tight">Kontent menejeri tayyor</h2>
+            <p className="text-[14px] text-mute mt-2 max-w-[420px] leading-relaxed">
+              Kanallaringiz uchun reja tuzing, postlar yozing, strategiya ishlab chiqing.
+              {accounts.length > 0
+                ? ` ${accounts.length} ta hisobingiz ulangan.`
+                : ' Boshlash uchun savolingizni yozing.'}
+            </p>
+
+            {/* Quick prompts */}
+            <div className="mt-7 grid grid-cols-2 gap-2 w-full max-w-[600px]">
+              {QUICK_PROMPTS.map((p) => (
+                <button
+                  key={p}
+                  onClick={() => sendMessage(p)}
+                  disabled={loading}
+                  className="text-left px-4 py-3 rounded-xl border border-line bg-surface hover:bg-surface2 hover:border-indigo-500/40 transition text-[13px] text-mute hover:text-ink disabled:opacity-50"
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {messages.map((msg) => (
+          <MessageBubble key={msg.id} msg={msg} />
+        ))}
+
+        {loading && (
+          <div className="flex gap-3">
+            <div className="w-8 h-8 rounded-xl shrink-0 flex items-center justify-center bg-surface2 border border-line">
+              <Bot size={14} className="text-indigo-400" />
+            </div>
+            <div className="bg-surface border border-line rounded-2xl rounded-tl-sm px-4 py-3 flex items-center gap-2.5">
+              <Loader2 size={14} className="animate-spin text-indigo-400" />
+              <span className="text-[13px] text-mute">Tayyorlanmoqda…</span>
+            </div>
+          </div>
+        )}
+
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Input */}
+      <div className="mt-3 shrink-0">
+        <div className="flex items-end gap-2 bg-surface border border-line rounded-2xl px-4 py-3 focus-within:border-indigo-500/40 transition">
+          <textarea
+            ref={inputRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            rows={1}
+            placeholder="Savolingizni yozing… (Enter — yuborish, Shift+Enter — yangi qator)"
+            className="flex-1 bg-transparent text-[14px] text-ink placeholder:text-faint resize-none focus:outline-none leading-relaxed max-h-36 overflow-y-auto"
+            style={{ fieldSizing: 'content' } as any}
+          />
+          <div className="flex items-center gap-1.5 shrink-0 pb-0.5">
+            {messages.length > 0 && (
+              <button
+                onClick={() => setMessages([])}
+                title="Suhbatni tozalash"
+                className="p-1.5 rounded-lg text-faint hover:text-ink hover:bg-surface2 transition"
+              >
+                <RefreshCw size={14} />
+              </button>
+            )}
+            <button
+              onClick={() => sendMessage()}
+              disabled={!input.trim() || loading}
+              className="p-2 rounded-xl bg-indigo-500 text-white hover:bg-indigo-400 transition disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Send size={14} />
+            </button>
+          </div>
+        </div>
+        <div className="mt-1.5 text-[11px] text-faint text-center">
+          Barcha ma'lumotlar mahalliy qurilmangizda · Ollama · {selectedModel}
         </div>
       </div>
     </div>

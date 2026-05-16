@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 
 interface Notification {
   id: string
@@ -13,40 +14,74 @@ interface UIState {
   sidebarOpen: boolean
   activePage: string
   notifications: Notification[]
+  theme: 'dark' | 'light'
   setSidebarOpen: (open: boolean) => void
   toggleSidebar: () => void
   setActivePage: (page: string) => void
   addNotification: (notification: Omit<Notification, 'id' | 'read' | 'created_at'>) => void
   markAllRead: () => void
   unreadCount: () => number
+  toggleTheme: () => void
+  setTheme: (theme: 'dark' | 'light') => void
 }
 
-export const useUIStore = create<UIState>((set, get) => ({
-  sidebarOpen: true,
-  activePage: 'dashboard',
-  notifications: [],
+function applyTheme(theme: 'dark' | 'light') {
+  if (theme === 'light') {
+    document.documentElement.classList.add('light')
+  } else {
+    document.documentElement.classList.remove('light')
+  }
+}
 
-  setSidebarOpen: (open) => set({ sidebarOpen: open }),
-  toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
-  setActivePage: (page) => set({ activePage: page }),
+export const useUIStore = create<UIState>()(
+  persist(
+    (set, get) => ({
+      sidebarOpen: true,
+      activePage: 'dashboard',
+      notifications: [],
+      theme: 'dark',
 
-  addNotification: (notification) =>
-    set((state) => ({
-      notifications: [
-        {
-          ...notification,
-          id: crypto.randomUUID(),
-          read: false,
-          created_at: new Date().toISOString(),
-        },
-        ...state.notifications,
-      ].slice(0, 50), // keep last 50
-    })),
+      setSidebarOpen: (open) => set({ sidebarOpen: open }),
+      toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
+      setActivePage: (page) => set({ activePage: page }),
 
-  markAllRead: () =>
-    set((state) => ({
-      notifications: state.notifications.map((n) => ({ ...n, read: true })),
-    })),
+      addNotification: (notification) =>
+        set((state) => ({
+          notifications: [
+            {
+              ...notification,
+              id: crypto.randomUUID(),
+              read: false,
+              created_at: new Date().toISOString(),
+            },
+            ...state.notifications,
+          ].slice(0, 50),
+        })),
 
-  unreadCount: () => get().notifications.filter((n) => !n.read).length,
-}))
+      markAllRead: () =>
+        set((state) => ({
+          notifications: state.notifications.map((n) => ({ ...n, read: true })),
+        })),
+
+      unreadCount: () => get().notifications.filter((n) => !n.read).length,
+
+      toggleTheme: () => {
+        const next = get().theme === 'dark' ? 'light' : 'dark'
+        applyTheme(next)
+        set({ theme: next })
+      },
+
+      setTheme: (theme) => {
+        applyTheme(theme)
+        set({ theme })
+      },
+    }),
+    {
+      name: 'contentflow-ui',
+      partialize: (state) => ({ theme: state.theme }),
+      onRehydrateStorage: () => (state) => {
+        if (state) applyTheme(state.theme)
+      },
+    }
+  )
+)

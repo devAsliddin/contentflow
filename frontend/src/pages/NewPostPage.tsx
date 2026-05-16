@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -6,7 +6,7 @@ import {
   UploadCloud, X, Play, Scissors, Captions, Image as ImageIcon, Music,
   Bold, Italic, Hash, AtSign, Smile, Sparkles, Loader2, Send, Languages,
   Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Calendar, Repeat2,
-  MessageSquare, MapPin, UserPlus, Info,
+  MessageSquare, MapPin, UserPlus, Info, Eye, AlertTriangle,
 } from 'lucide-react'
 import { accountsService } from '@/services/accounts.service'
 import { postsService } from '@/services/posts.service'
@@ -15,9 +15,12 @@ import PlatformChip, { PLATFORM_META, type PlatformKind } from '@/components/ui/
 import Avatar from '@/components/ui/Avatar'
 import ImgPlaceholder from '@/components/ui/ImgPlaceholder'
 import StatusPill from '@/components/ui/StatusPill'
+import UploadZone from '@/components/posts/UploadZone'
 import type { Account } from '@/types/account.types'
+import type { AspectRatio, CreatePostRequest, PlatformOptions, PlatformPlacement, PostReview } from '@/types/post.types'
 
 const PEAK_SLOTS = ['07:15', '12:00', '15:30', '18:00', '21:30']
+const ASPECTS: AspectRatio[] = ['9:16', '16:9', '1:1', '4:5']
 
 function ToolbarBtn({ icon: Icon }: { icon: any }) {
   return (
@@ -51,18 +54,198 @@ function SettingsRow({ icon: Icon, label, value }: { icon: any; label: string; v
   )
 }
 
-function MiniCalendar() {
+function SegmentButton({
+  active, onClick, children, disabled,
+}: { active: boolean; onClick: () => void; children: ReactNode; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={`px-2.5 py-1 rounded-md text-xs border transition disabled:opacity-40 disabled:cursor-not-allowed ${
+        active
+          ? 'bg-indigo-500/15 text-ink border-indigo-500/40'
+          : 'bg-bg/40 text-mute border-line hover:border-line2 hover:text-ink'
+      }`}
+    >
+      {children}
+    </button>
+  )
+}
+
+const PLACEMENT_LABEL: Record<string, string> = {
+  feed: 'Post',
+  reel: 'Reel',
+  story: 'Story',
+  post: 'Post',
+}
+
+function DestinationOptions({
+  hasInstagram,
+  hasTikTok,
+  mediaType,
+  options,
+  onChange,
+}: {
+  hasInstagram: boolean
+  hasTikTok: boolean
+  mediaType?: 'image' | 'video'
+  options: PlatformOptions
+  onChange: (platform: 'instagram' | 'tiktok', patch: { placement?: PlatformPlacement; aspect_ratio?: AspectRatio }) => void
+}) {
+  if (!hasInstagram && !hasTikTok) return null
+
+  const igPlacement = options.instagram?.placement || (mediaType === 'video' ? 'reel' : 'feed')
+  const igAspect = options.instagram?.aspect_ratio || (igPlacement === 'story' || igPlacement === 'reel' ? '9:16' : mediaType === 'image' ? '1:1' : '16:9')
+  const tikTokAspect = options.tiktok?.aspect_ratio || '9:16'
+  const instagramPlacements: PlatformPlacement[] = mediaType === 'video' ? ['reel', 'feed', 'story'] : ['feed', 'story']
+
+  return (
+    <div className="rounded-2xl bg-surface border border-line p-5">
+      <div className="text-[11px] uppercase tracking-[0.16em] text-faint mb-4">Format & destination</div>
+      <div className="space-y-4">
+        {hasInstagram && (
+          <div className="rounded-xl border border-line bg-bg/40 p-3">
+            <div className="flex items-center gap-2 mb-3">
+              <PlatformChip kind="instagram" size={20} ring />
+              <span className="text-sm text-ink">Instagram</span>
+            </div>
+            {!mediaType ? (
+              <div className="text-xs text-rose-300">Text-only post Instagramga yuborilmaydi.</div>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex flex-wrap gap-1.5">
+                  {instagramPlacements.map((placement) => (
+                    <SegmentButton
+                      key={placement}
+                      active={igPlacement === placement}
+                      onClick={() => onChange('instagram', {
+                        placement,
+                        aspect_ratio: placement === 'story' || placement === 'reel' ? '9:16' : igAspect,
+                      })}
+                    >
+                      {PLACEMENT_LABEL[placement]}
+                    </SegmentButton>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {ASPECTS.map((aspect) => (
+                    <SegmentButton
+                      key={aspect}
+                      active={igAspect === aspect}
+                      onClick={() => onChange('instagram', { aspect_ratio: aspect })}
+                    >
+                      {aspect}
+                    </SegmentButton>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {hasTikTok && (
+          <div className="rounded-xl border border-line bg-bg/40 p-3">
+            <div className="flex items-center gap-2 mb-3">
+              <PlatformChip kind="tiktok" size={20} ring />
+              <span className="text-sm text-ink">TikTok</span>
+            </div>
+            {mediaType !== 'video' ? (
+              <div className="text-xs text-rose-300">TikTok faqat video qabul qiladi.</div>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex flex-wrap gap-1.5">
+                  <SegmentButton active onClick={() => onChange('tiktok', { placement: 'post' })}>Post</SegmentButton>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {(['9:16', '16:9'] as AspectRatio[]).map((aspect) => (
+                    <SegmentButton
+                      key={aspect}
+                      active={tikTokAspect === aspect}
+                      onClick={() => onChange('tiktok', { placement: 'post', aspect_ratio: aspect })}
+                    >
+                      {aspect}
+                    </SegmentButton>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ReviewPanel({ review }: { review: PostReview | null }) {
+  if (!review) return null
+  return (
+    <div className={`rounded-2xl border p-4 ${review.ok ? 'border-mint-500/30 bg-mint-500/5' : 'border-rose-500/30 bg-rose-500/5'}`}>
+      <div className="flex items-center gap-2 text-sm text-ink mb-3">
+        {review.ok ? <Check size={15} className="text-mint-500" /> : <AlertTriangle size={15} className="text-rose-300" />}
+        Review {review.ok ? 'ready' : 'blocked'}
+      </div>
+      <div className="space-y-2">
+        {review.errors.slice(0, 3).map((error, i) => (
+          <div key={`e-${i}`} className="text-xs text-rose-200">{error}</div>
+        ))}
+        {review.warnings.slice(0, 3).map((warning, i) => (
+          <div key={`w-${i}`} className="text-xs text-amber-200">{warning}</div>
+        ))}
+        {review.targets.map((target) => (
+          <div key={`${target.platform}-${target.account_id}`} className="flex items-center justify-between gap-2 text-xs rounded-lg bg-bg/50 border border-line px-2.5 py-2">
+            <div className="min-w-0">
+              <div className="text-ink truncate">{target.account_name || target.platform}</div>
+              <div className="text-faint tnum">
+                {[target.placement, target.aspect_ratio].filter(Boolean).join(' · ') || 'default'}
+              </div>
+            </div>
+            <span className={target.status === 'ready' ? 'text-mint-500' : 'text-rose-300'}>
+              {target.status}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function MiniCalendar({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const today = new Date()
-  const days = Array.from({ length: 35 }, (_, i) => i - (new Date(today.getFullYear(), today.getMonth(), 1).getDay() + 6) % 7 + 1)
-  const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()
+  const [viewYear, setViewYear] = useState(today.getFullYear())
+  const [viewMonth, setViewMonth] = useState(today.getMonth())
+  const firstDay = new Date(viewYear, viewMonth, 1)
+  const days = Array.from({ length: 35 }, (_, i) => i - (firstDay.getDay() + 6) % 7 + 1)
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate()
+  const selected = value ? new Date(value) : null
+
+  function selectDay(d: number) {
+    const existing = value ? new Date(value) : new Date()
+    const next = new Date(viewYear, viewMonth, d,
+      isNaN(existing.getHours()) ? 12 : existing.getHours(),
+      isNaN(existing.getMinutes()) ? 0 : existing.getMinutes())
+    // format as datetime-local value: YYYY-MM-DDTHH:mm
+    const pad = (n: number) => String(n).padStart(2, '0')
+    onChange(`${next.getFullYear()}-${pad(next.getMonth() + 1)}-${pad(next.getDate())}T${pad(next.getHours())}:${pad(next.getMinutes())}`)
+  }
+
+  function prevMonth() {
+    if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1) }
+    else setViewMonth(m => m - 1)
+  }
+  function nextMonth() {
+    if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1) }
+    else setViewMonth(m => m + 1)
+  }
+
+  const monthName = new Date(viewYear, viewMonth).toLocaleString('en-US', { month: 'long', year: 'numeric' })
+
   return (
     <div className="bg-bg/40 rounded-lg p-3 border border-line">
       <div className="flex items-center justify-between mb-2">
-        <button className="text-mute hover:text-ink"><ChevronLeft size={14} /></button>
-        <div className="text-xs text-ink font-medium tnum">
-          {today.toLocaleString('en-US', { month: 'long', year: 'numeric' })}
-        </div>
-        <button className="text-mute hover:text-ink"><ChevronRight size={14} /></button>
+        <button type="button" onClick={prevMonth} className="text-mute hover:text-ink"><ChevronLeft size={14} /></button>
+        <div className="text-xs text-ink font-medium tnum">{monthName}</div>
+        <button type="button" onClick={nextMonth} className="text-mute hover:text-ink"><ChevronRight size={14} /></button>
       </div>
       <div className="grid grid-cols-7 gap-1 text-center text-[10px] text-faint mb-1">
         {['M','T','W','T','F','S','S'].map((d, i) => <div key={i}>{d}</div>)}
@@ -70,11 +253,14 @@ function MiniCalendar() {
       <div className="grid grid-cols-7 gap-1 text-center text-[11px] tnum">
         {days.map((d, i) => {
           const valid = d >= 1 && d <= daysInMonth
-          const isToday = valid && d === today.getDate()
+          const isToday = valid && d === today.getDate() && viewMonth === today.getMonth() && viewYear === today.getFullYear()
+          const isSelected = valid && selected && d === selected.getDate() && viewMonth === selected.getMonth() && viewYear === selected.getFullYear()
           return (
             <button
+              type="button"
               key={i}
-              className={`h-7 rounded relative ${isToday ? 'bg-indigo-500 text-white' : valid ? 'text-ink hover:bg-surface2' : 'text-faint/30'}`}
+              onClick={() => valid && selectDay(d)}
+              className={`h-7 rounded relative ${isSelected ? 'bg-indigo-500 text-white' : isToday ? 'bg-indigo-500/20 text-indigo-300' : valid ? 'text-ink hover:bg-surface2' : 'text-faint/30 cursor-default'}`}
             >
               {valid ? d : ''}
             </button>
@@ -127,13 +313,19 @@ export default function NewPostPage() {
   const [mediaUrl, setMediaUrl] = useState('')
   const [mediaType, setMediaType] = useState<'image' | 'video' | undefined>()
   const [selectedAccounts, setSelectedAccounts] = useState<Record<string, boolean>>({})
-  const [scheduleMode, setScheduleMode] = useState<'now' | 'schedule'>('schedule')
+  const [scheduleMode, setScheduleMode] = useState<'now' | 'schedule'>('now')
   const [selectedTime, setSelectedTime] = useState('18:00')
   const [scheduledAt, setScheduledAt] = useState('')
   const [dragOver, setDragOver] = useState(false)
   const [hasMedia, setHasMedia] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [reviewing, setReviewing] = useState(false)
+  const [review, setReview] = useState<PostReview | null>(null)
+  const [platformOptions, setPlatformOptions] = useState<PlatformOptions>({
+    instagram: { placement: 'feed', aspect_ratio: '1:1' },
+    tiktok: { placement: 'post', aspect_ratio: '9:16' },
+  })
 
   const { data: accounts = [] } = useQuery({
     queryKey: ['accounts'],
@@ -142,8 +334,87 @@ export default function NewPostPage() {
 
   const allAccounts = accounts.map((a) => ({ ...a, kind: a.platform as PlatformKind }))
   const accountCount = Object.values(selectedAccounts).filter(Boolean).length
+  const selectedKinds = new Set(
+    Object.entries(selectedAccounts)
+      .filter(([, selected]) => selected)
+      .map(([id]) => allAccounts.find((a) => a.id === id)?.kind)
+      .filter(Boolean) as PlatformKind[]
+  )
+  const hasInstagramSelected = selectedKinds.has('instagram')
+  const hasTikTokSelected = selectedKinds.has('tiktok')
 
   const toggle = (id: string) => setSelectedAccounts((s) => ({ ...s, [id]: !s[id] }))
+
+  useEffect(() => {
+    setReview(null)
+    setPlatformOptions((current) => ({
+      ...current,
+      instagram: {
+        placement: mediaType === 'video'
+          ? (current.instagram?.placement === 'story' ? 'story' : 'reel')
+          : current.instagram?.placement === 'story' ? 'story' : 'feed',
+        aspect_ratio: mediaType === 'video'
+          ? (current.instagram?.aspect_ratio || '9:16')
+          : (current.instagram?.aspect_ratio === '9:16' ? '1:1' : current.instagram?.aspect_ratio || '1:1'),
+      },
+      tiktok: {
+        placement: 'post',
+        aspect_ratio: current.tiktok?.aspect_ratio === '16:9' ? '16:9' : '9:16',
+      },
+    }))
+  }, [mediaType, mediaUrl])
+
+  function updatePlatformOption(platform: 'instagram' | 'tiktok', patch: { placement?: PlatformPlacement; aspect_ratio?: AspectRatio }) {
+    setReview(null)
+    setPlatformOptions((current) => ({
+      ...current,
+      [platform]: {
+        ...(current[platform] || {}),
+        ...patch,
+      },
+    }))
+  }
+
+  function selectedPlatformEntries() {
+    return Object.entries(selectedAccounts)
+      .filter(([, v]) => v)
+      .map(([id]) => {
+        const account = allAccounts.find((a) => a.id === id)
+        return account ? `${account.kind}:${id}` : id
+      })
+  }
+
+  function buildPayload(scheduledFor: string | null = null): CreatePostRequest {
+    return {
+      caption: caption.trim(),
+      media_url: mediaUrl || undefined,
+      media_type: mediaType,
+      platforms: selectedPlatformEntries(),
+      platform_options: platformOptions,
+      scheduled_at: scheduledFor,
+    }
+  }
+
+  async function handleReview() {
+    const payload = buildPayload()
+    if (payload.platforms.length === 0) {
+      toast.error('Select at least one account')
+      return null
+    }
+    setReviewing(true)
+    try {
+      const result = await postsService.review(payload)
+      setReview(result)
+      if (result.ok) toast.success('Review tayyor')
+      else toast.error(result.errors[0] || 'Review blocked')
+      return result
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail || 'Review failed')
+      return null
+    } finally {
+      setReviewing(false)
+    }
+  }
 
   async function handleGenerate() {
     if (!caption && accounts.length === 0) {
@@ -164,30 +435,52 @@ export default function NewPostPage() {
   }
 
   async function handleSubmit() {
-    const platforms = Object.entries(selectedAccounts)
-      .filter(([, v]) => v)
-      .map(([id]) => id)
+    const platforms = selectedPlatformEntries()
 
     if (platforms.length === 0) {
       toast.error('Select at least one account')
       return
     }
+    if (!caption.trim() && !mediaUrl) {
+      toast.error('Caption yoki media kiriting')
+      return
+    }
+
+    let scheduledFor: string | null = null
+    if (scheduleMode === 'schedule') {
+      if (!scheduledAt) {
+        toast.error('Schedule uchun sana va vaqt tanlang')
+        return
+      }
+      const scheduledDate = new Date(scheduledAt)
+      if (Number.isNaN(scheduledDate.getTime()) || scheduledDate <= new Date()) {
+        toast.error('Schedule vaqti kelajakda bo\'lishi kerak')
+        return
+      }
+      scheduledFor = scheduledDate.toISOString()
+    }
 
     setSubmitting(true)
     try {
-      const post = await postsService.create({
-        caption,
-        media_url: mediaUrl || undefined,
-        media_type: mediaType,
-        platforms,
-        scheduled_at: scheduleMode === 'now' ? null : scheduledAt || null,
-      })
+      const payload = buildPayload(scheduledFor)
+      const reviewResult = await postsService.review(payload)
+      setReview(reviewResult)
+      if (!reviewResult.ok) {
+        toast.error(reviewResult.errors[0] || 'Review blocked')
+        return
+      }
+
+      const post = await postsService.create(payload)
 
       if (scheduleMode === 'now') {
-        await postsService.triggerNow(post.id)
-        toast.success('Post queued for immediate publishing')
+        const publishResult = await postsService.triggerNow(post.id)
+        if (publishResult.status === 'failed') {
+          toast.error(publishResult.errors[0] || 'Post yuborilmadi')
+          return
+        }
+        toast.success('Post yuborildi')
       } else {
-        toast.success('Post scheduled successfully')
+        toast.success('Post schedule qilindi')
       }
       navigate('/')
     } catch (err: any) {
@@ -202,6 +495,18 @@ export default function NewPostPage() {
       {/* Left column */}
       <div className="col-span-12 lg:col-span-8 space-y-6">
         {/* Upload zone */}
+        <div className="rounded-2xl bg-surface border border-line p-5">
+          <UploadZone
+            value={mediaUrl}
+            mediaType={mediaType}
+            onUpload={(url, type) => {
+              setMediaUrl(url)
+              setMediaType(url ? type : undefined)
+            }}
+          />
+        </div>
+
+        {false && (
         <div
           onDragEnter={() => setDragOver(true)}
           onDragLeave={() => setDragOver(false)}
@@ -270,6 +575,7 @@ export default function NewPostPage() {
             </div>
           )}
         </div>
+        )}
 
         {/* Caption editor */}
         <div className="rounded-2xl bg-surface border border-line overflow-hidden">
@@ -354,6 +660,14 @@ export default function NewPostPage() {
             ))}
           </div>
         </div>
+
+        <DestinationOptions
+          hasInstagram={hasInstagramSelected}
+          hasTikTok={hasTikTokSelected}
+          mediaType={mediaType}
+          options={platformOptions}
+          onChange={updatePlatformOption}
+        />
       </div>
 
       {/* Right column — schedule */}
@@ -390,14 +704,21 @@ export default function NewPostPage() {
                   />
                 </div>
               </div>
-              <MiniCalendar />
+              <MiniCalendar value={scheduledAt} onChange={setScheduledAt} />
               <div>
                 <div className="text-[10px] uppercase tracking-[0.14em] text-faint mb-1.5">Suggested peak times</div>
                 <div className="flex flex-wrap gap-1.5">
                   {PEAK_SLOTS.map((s) => (
                     <button
+                      type="button"
                       key={s}
-                      onClick={() => setSelectedTime(s)}
+                      onClick={() => {
+                        setSelectedTime(s)
+                        const [h, m] = s.split(':').map(Number)
+                        const base = scheduledAt ? new Date(scheduledAt) : new Date()
+                        const pad = (n: number) => String(n).padStart(2, '0')
+                        setScheduledAt(`${base.getFullYear()}-${pad(base.getMonth() + 1)}-${pad(base.getDate())}T${pad(h)}:${pad(m)}`)
+                      }}
                       className={`px-2.5 py-1 rounded-md text-xs tnum border transition ${
                         selectedTime === s
                           ? 'bg-indigo-500/15 text-ink border-indigo-500/40'
@@ -433,6 +754,17 @@ export default function NewPostPage() {
             <SettingsRow icon={UserPlus}      label="Collaborator"   value="None" />
           </div>
         </div>
+
+        <ReviewPanel review={review} />
+
+        <button
+          onClick={handleReview}
+          disabled={reviewing || submitting}
+          className="w-full py-3 rounded-2xl bg-surface border border-line text-ink font-medium hover:border-line2 hover:bg-surface2 transition flex items-center justify-center gap-2 text-[14px] disabled:opacity-60"
+        >
+          {reviewing ? <Loader2 size={15} className="animate-spin" /> : <Eye size={15} />}
+          Review post
+        </button>
 
         <button
           onClick={handleSubmit}

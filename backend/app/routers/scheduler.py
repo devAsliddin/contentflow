@@ -25,13 +25,33 @@ async def trigger_post_now(
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
 
-    if post.status not in ("draft", "failed"):
+    if post.status not in ("draft", "scheduled", "failed"):
         raise HTTPException(status_code=400, detail=f"Cannot trigger post with status: {post.status}")
 
-    from app.tasks.post_tasks import schedule_post
-    task = schedule_post.delay(str(post.id))
-    post.celery_task_id = task.id
-    post.status = "scheduled"
-    db.add(post)
+    from app.tasks.post_tasks import _publish_post, get_async_session
 
-    return {"task_id": task.id, "message": "Post queued for immediate publishing"}
+    class ImmediatePublishTask:
+        session_factory = get_async_session()
+
+    result = await _publish_post(ImmediatePublishTask(), str(post.id))
+    if not result or not result.get("success"):
+        errors = [
+            r.get("error")
+            for r in (result or {}).get("results", [])
+            if r.get("status") == "failed" and r.get("error")
+        ]
+        return {
+            "task_id": None,
+            "message": "Post yuborilmadi",
+            "status": "failed",
+            "errors": errors,
+            "results": (result or {}).get("results", []),
+        }
+
+    return {
+        "task_id": None,
+        "message": "Post yuborildi",
+        "status": "published",
+        "errors": [],
+        "results": result.get("results", []),
+    }

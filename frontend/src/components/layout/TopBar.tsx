@@ -1,16 +1,19 @@
 import { useNavigate, useLocation } from 'react-router-dom'
-import { Search, Bell, Plus } from 'lucide-react'
-import { useAuthStore } from '@/store'
+import { Search, Bell, Plus, Sun, Moon } from 'lucide-react'
+import { useAuthStore, useUIStore } from '@/store'
 
 const TITLES: Record<string, { eyebrow: string; title: string }> = {
-  '/':          { eyebrow: 'Home',      title: 'Good evening' },
-  '/new-post':  { eyebrow: 'Compose',   title: 'New post' },
-  '/calendar':  { eyebrow: 'Schedule',  title: 'Content calendar' },
-  '/accounts':  { eyebrow: 'Network',   title: 'Connected accounts' },
-  '/ai-plan':   { eyebrow: 'AI',        title: 'Plan generator' },
-  '/analytics': { eyebrow: 'Insights',  title: 'Analytics' },
-  '/settings':  { eyebrow: 'Workspace', title: 'Settings' },
-  '/admin':     { eyebrow: 'System',    title: 'Admin panel' },
+  '/':           { eyebrow: 'Home',      title: 'Good evening' },
+  '/new-post':   { eyebrow: 'Compose',   title: 'New post' },
+  '/calendar':   { eyebrow: 'Schedule',  title: 'Content calendar' },
+  '/accounts':   { eyebrow: 'Network',   title: 'Connected accounts' },
+  '/ai-chat':    { eyebrow: 'AI',        title: 'AI SMM menejer' },
+  '/analytics':  { eyebrow: 'Insights',  title: 'Analytics' },
+  '/settings':   { eyebrow: 'Workspace', title: 'Settings' },
+  '/admin':      { eyebrow: 'System',    title: 'Admin panel' },
+  '/drafts':     { eyebrow: 'Workflow',  title: 'Draft queue' },
+  '/approval':   { eyebrow: 'Workflow',  title: 'Approval queue' },
+  '/templates':  { eyebrow: 'Content',   title: 'Template library' },
 }
 
 function getGreeting() {
@@ -24,6 +27,8 @@ export default function TopBar() {
   const navigate = useNavigate()
   const location = useLocation()
   const user = useAuthStore((s) => s.user)
+  const theme = useUIStore((s) => s.theme)
+  const toggleTheme = useUIStore((s) => s.toggleTheme)
 
   const meta = TITLES[location.pathname] || TITLES['/']
   const isDashboard = location.pathname === '/'
@@ -51,6 +56,15 @@ export default function TopBar() {
           />
           <span className="text-[10px] font-mono text-faint border border-line rounded px-1 py-0.5">⌘K</span>
         </div>
+
+        {/* V2-UI-005: Dark mode toggle */}
+        <button
+          onClick={toggleTheme}
+          title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+          className="p-2 rounded-lg bg-surface border border-line text-mute hover:text-ink transition"
+        >
+          {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+        </button>
 
         <button className="relative p-2 rounded-lg bg-surface border border-line text-mute hover:text-ink transition">
           <Bell size={16} />

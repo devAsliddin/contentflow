@@ -3,7 +3,7 @@ import {
   LayoutDashboard, PlusCircle, CalendarDays, UsersRound,
   Sparkles, LineChart, Settings2, PanelLeftClose, PanelLeftOpen,
   ChevronUp, ShieldCheck, LogOut, FileEdit, ClipboardCheck, Layers,
-  ChevronDown, X,
+  ChevronDown, X, MessageSquare,
 } from 'lucide-react'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
@@ -17,7 +17,7 @@ const NAV_TOP = [
   { to: '/dashboard/new-post',  label: 'New Post',  icon: PlusCircle,      kbd: '⌘N' },
   { to: '/dashboard/calendar',  label: 'Calendar',  icon: CalendarDays },
   { to: '/dashboard/accounts',  label: 'Accounts',  icon: UsersRound },
-  { to: '/dashboard/ai-plan',   label: 'AI Plan',   icon: Sparkles },
+  { to: '/dashboard/ai-chat',   label: 'AI Menejer',   icon: MessageSquare },
 ]
 
 const NAV_WORKFLOW = [

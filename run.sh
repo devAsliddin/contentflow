@@ -158,12 +158,71 @@ else
 fi
 
 # Ensure frontend .env.local exists
-[ -f "$FRONTEND/.env.local" ] || echo "VITE_API_URL=http://localhost:8000/api/v1" > "$FRONTEND/.env.local"
+[ -f "$FRONTEND/.env.local" ] || echo "VITE_API_URL=/api/v1" > "$FRONTEND/.env.local"
 
-# ── 6. Start FastAPI ──────────────────────────────────────────────────
+# ── 6. Ollama (local AI) — start early so it's ready before backend ───
+OLLAMA_DEFAULT_MODEL="llama3.2"
+OLLAMA_RUNNING=false
+OLLAMA_CMD=""
+
+log "Checking Ollama (local AI)..."
+
+WIN_USER="${USERNAME:-${USER:-$(whoami 2>/dev/null || echo '')}}"
+for candidate in \
+  "ollama" \
+  "/c/Users/$WIN_USER/AppData/Local/Programs/Ollama/ollama.exe" \
+  "$LOCALAPPDATA/Programs/Ollama/ollama.exe" \
+  "/usr/local/bin/ollama" \
+  "/usr/bin/ollama"; do
+  if command -v "$candidate" &>/dev/null 2>&1 || [ -f "$candidate" ]; then
+    OLLAMA_CMD="$candidate"
+    break
+  fi
+done
+
+ollama_api_ping() {
+  curl -sf http://localhost:11434/api/tags &>/dev/null 2>&1
+}
+
+if ollama_api_ping; then
+  ok "Ollama already running (http://localhost:11434)"
+  OLLAMA_RUNNING=true
+elif [ -n "$OLLAMA_CMD" ]; then
+  log "Starting Ollama..."
+  "$OLLAMA_CMD" serve > "$LOG_DIR/ollama.log" 2>&1 &
+  OLLAMA_PID=$!
+  echo "$OLLAMA_PID" >> "$PID_FILE"
+  for i in 1 2 3 4 5 6 7 8; do
+    ollama_api_ping && break
+    sleep 1
+  done
+  if ollama_api_ping; then
+    ok "Ollama started (pid $OLLAMA_PID)"
+    OLLAMA_RUNNING=true
+  else
+    warn "Ollama did not respond — AI Chat may not work. Check $LOG_DIR/ollama.log"
+  fi
+else
+  warn "Ollama not found — AI Chat will be unavailable."
+  warn "Install: https://ollama.com/download  then run: ollama pull $OLLAMA_DEFAULT_MODEL"
+fi
+
+if $OLLAMA_RUNNING && [ -n "$OLLAMA_CMD" ]; then
+  if ! "$OLLAMA_CMD" list 2>/dev/null | grep -q "$OLLAMA_DEFAULT_MODEL"; then
+    log "Pulling '$OLLAMA_DEFAULT_MODEL' (bu bir necha daqiqa olishi mumkin)..."
+    "$OLLAMA_CMD" pull "$OLLAMA_DEFAULT_MODEL" > "$LOG_DIR/ollama_pull.log" 2>&1 &
+    PULL_PID=$!
+    echo "$PULL_PID" >> "$PID_FILE"
+    ok "Pulling '$OLLAMA_DEFAULT_MODEL' background da (pid $PULL_PID)"
+  else
+    ok "Model '$OLLAMA_DEFAULT_MODEL' tayyor"
+  fi
+fi
+
+# ── 7. Start FastAPI ──────────────────────────────────────────────────
 log "Starting FastAPI backend..."
 cd "$BACKEND"
-"$VENV_BIN/uvicorn" app.main:app --host 0.0.0.0 --port 8000 --reload \
+"$VENV_BIN/uvicorn" app.main:app --host 0.0.0.0 --port 8001 --reload \
   > "$LOG_DIR/backend.log" 2>&1 &
 BACKEND_PID=$!
 echo "$BACKEND_PID" >> "$PID_FILE"
@@ -184,7 +243,7 @@ echo "$CELERY_PID" >> "$PID_FILE"
 cd "$ROOT"
 ok "Celery worker started (pid $CELERY_PID)"
 
-# ── 8. Start Vite ─────────────────────────────────────────────────────
+# ── 9. Start Vite ─────────────────────────────────────────────────────
 log "Starting Vite frontend..."
 cd "$FRONTEND"
 npm run dev -- --host 0.0.0.0 > "$LOG_DIR/frontend.log" 2>&1 &
@@ -200,8 +259,13 @@ kill -0 "$VITE_PID" 2>/dev/null \
 echo ""
 echo -e "${BOLD}${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "  ${CYAN}App${NC}      →  ${BOLD}http://localhost:5173${NC}"
-echo -e "  ${CYAN}API${NC}      →  http://localhost:8000/api/v1"
-echo -e "  ${CYAN}Swagger${NC}  →  http://localhost:8000/api/docs"
+echo -e "  ${CYAN}API${NC}      →  http://localhost:8001/api/v1"
+echo -e "  ${CYAN}Swagger${NC}  →  http://localhost:8001/api/docs"
+if $OLLAMA_RUNNING; then
+echo -e "  ${CYAN}Ollama${NC}   →  http://localhost:11434  (AI Chat aktiv)"
+else
+echo -e "  ${YELLOW}Ollama${NC}   →  offline  (AI Chat ishlamaydi)"
+fi
 echo -e ""
 echo -e "  Logs: ${LOG_DIR}/"
 echo -e "  ${RED}Ctrl+C${NC} to stop everything."

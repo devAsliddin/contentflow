@@ -14,7 +14,8 @@ ExecStart=/var/www/contentflow/venv/bin/celery \
     --loglevel=info \
     --concurrency=4 \
     --queues=celery \
-    --hostname=worker@%h
+    --hostname=worker@%h \
+    --logfile=/var/log/contentflow/celery.log
 Restart=always
 RestartSec=10
 StandardOutput=journal
@@ -23,6 +24,8 @@ SyslogIdentifier=contentflow-celery
 
 NoNewPrivileges=yes
 PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=/var/www/contentflow/media /var/log/contentflow
 
 [Install]
 WantedBy=multi-user.target

@@ -6,7 +6,7 @@ import DashboardPage from '@/pages/DashboardPage'
 import NewPostPage from '@/pages/NewPostPage'
 import AccountsPage from '@/pages/AccountsPage'
 import CalendarPage from '@/pages/CalendarPage'
-import AiPlanPage from '@/pages/AiPlanPage'
+import AiChatPage from '@/pages/AiChatPage'
 import AnalyticsPage from '@/pages/AnalyticsPage'
 import SettingsPage from '@/pages/SettingsPage'
 import AdminPage from '@/pages/AdminPage'
@@ -31,7 +31,7 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Routes>
         {/* Public routes */}
         <Route path="/" element={<LandingPage />} />
@@ -51,7 +51,8 @@ export default function App() {
           <Route path="new-post" element={<NewPostPage />} />
           <Route path="accounts" element={<AccountsPage />} />
           <Route path="calendar" element={<CalendarPage />} />
-          <Route path="ai-plan" element={<AiPlanPage />} />
+          <Route path="ai-plan" element={<Navigate to="/dashboard/ai-chat" replace />} />
+          <Route path="ai-chat" element={<AiChatPage />} />
           <Route path="analytics" element={<AnalyticsPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="drafts" element={<DraftsPage />} />

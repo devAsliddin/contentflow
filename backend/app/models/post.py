@@ -16,6 +16,7 @@ class Post(Base):
     media_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     media_type: Mapped[str | None] = mapped_column(String(20), nullable=True)  # image | video
     platforms: Mapped[list] = mapped_column(JSON, default=list)  # ["instagram:acc_id", "telegram:acc_id"]
+    platform_options: Mapped[dict] = mapped_column(JSON, default=dict)
     scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     status: Mapped[str] = mapped_column(
         String(20), default="draft"

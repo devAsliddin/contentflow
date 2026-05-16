@@ -26,13 +26,13 @@ fail() {
 }
 
 restart_services() {
-  sudo systemctl restart contentflow-backend || true
-  sudo systemctl restart contentflow-celery || true
-  sudo systemctl reload nginx || true
+  sudo systemctl restart contentflow-backend    || true
+  sudo systemctl restart contentflow-celery     || true
+  sudo systemctl restart contentflow-celery-beat || true
+  sudo systemctl reload  nginx                  || true
 }
 
 log "==> Starting ContentFlow deployment"
-
 cd "$APP_DIR"
 
 # ──── Save rollback point ────────────────────────────────────────────
@@ -65,15 +65,24 @@ cd ..
 
 # ──── Copy frontend build to Nginx root ──────────────────────────────
 log "==> Updating Nginx static files..."
-rm -rf /var/www/contentflow/dist.old 2>/dev/null || true
-[ -d /var/www/contentflow/dist.bak ] && mv /var/www/contentflow/dist.bak /var/www/contentflow/dist.old || true
-cp -r frontend/dist /var/www/contentflow/dist.bak
-rsync -a frontend/dist/ /var/www/html/contentflow/ --delete || true
+rsync -a --delete frontend/dist/ /var/www/html/contentflow/
+
+# ──── Ensure media dir exists with correct permissions ───────────────
+mkdir -p "$APP_DIR/media"
+chown contentflow:www-data "$APP_DIR/media"
+chmod 750 "$APP_DIR/media"
+
+# ──── Install systemd services ───────────────────────────────────────
+log "==> Installing systemd service files..."
+sudo cp devops/systemd/contentflow-backend.service    /etc/systemd/system/
+sudo cp devops/systemd/contentflow-celery.service     /etc/systemd/system/
+sudo cp devops/systemd/contentflow-celery-beat.service /etc/systemd/system/
+sudo systemctl daemon-reload
 
 # ──── Restart services ───────────────────────────────────────────────
 log "==> Restarting services..."
 restart_services
-sleep 3
+sleep 4
 
 # ──── Health check ───────────────────────────────────────────────────
 log "==> Running health check..."
@@ -84,7 +93,3 @@ fi
 log "Health check passed (HTTP $HEALTH)"
 
 log "==> Deployment complete! Git commit: $(git rev-parse --short HEAD)"
-echo ""
-echo "  Frontend: http://YOUR_VPS_IP"
-echo "  API:      http://YOUR_VPS_IP/api"
-echo "  API docs: http://YOUR_VPS_IP/api/docs"

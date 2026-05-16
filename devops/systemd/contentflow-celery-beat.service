@@ -1,0 +1,29 @@
+[Unit]
+Description=ContentFlow Celery Beat Scheduler (periodic tasks)
+After=network.target redis.service postgresql.service
+Wants=redis.service postgresql.service
+
+[Service]
+Type=exec
+User=contentflow
+Group=contentflow
+WorkingDirectory=/var/www/contentflow/backend
+EnvironmentFile=/etc/contentflow/.env
+ExecStart=/var/www/contentflow/venv/bin/celery \
+    -A app.tasks.celery_app beat \
+    --loglevel=info \
+    --schedule=/var/www/contentflow/celerybeat-schedule \
+    --logfile=/var/log/contentflow/celery-beat.log
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=contentflow-celery-beat
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=/var/www/contentflow /var/log/contentflow
+
+[Install]
+WantedBy=multi-user.target

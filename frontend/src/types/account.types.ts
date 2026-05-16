@@ -24,3 +24,24 @@ export interface ConnectAccountRequest {
   account_name: string
   credentials: AccountCredentials
 }
+
+export interface TelegramChannel {
+  id: string
+  account_name: string
+  channel_id: string
+  created_at: string
+}
+
+export interface TelegramBotSettings {
+  bot_name: string | null
+  bot_username: string | null
+  bot_valid: boolean
+  channels: TelegramChannel[]
+  max_channels: number
+  can_add: boolean
+}
+
+export interface AddTelegramChannelRequest {
+  channel_id: string
+  label?: string
+}

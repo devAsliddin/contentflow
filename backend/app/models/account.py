@@ -19,6 +19,9 @@ class Account(Base):
     account_name: Mapped[str] = mapped_column(String(255), nullable=False)
     credentials: Mapped[str] = mapped_column(Text, nullable=False)  # encrypted JSON
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # V2-ACC-003: OAuth2 migration tracking
+    oauth_migrated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="false")
+    oauth_migrated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

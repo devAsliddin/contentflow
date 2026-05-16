@@ -27,3 +27,4 @@ class User(Base):
 
     accounts: Mapped[list["Account"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     posts: Mapped[list["Post"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    templates: Mapped[list["PostTemplate"]] = relationship(back_populates="user", cascade="all, delete-orphan")

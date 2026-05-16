@@ -41,7 +41,71 @@ export interface PlatformAnalytics {
   failed: number
 }
 
-// AI Plan types
+// AI Plan types — spec-compliant
+
+export type Platform =
+  | 'instagram'
+  | 'telegram'
+  | 'tiktok'
+  | 'facebook'
+  | 'linkedin'
+  | 'youtube'
+  | 'twitter'
+
+export type Tone =
+  | 'professional'
+  | 'casual'
+  | 'humorous'
+  | 'educational'
+  | 'inspirational'
+
+export interface PlanPost {
+  day: number           // 0=Monday … 6=Sunday
+  platform: string
+  idea: string
+  scheduled_time: string  // "HH:MM"
+}
+
+export interface WeeklyPlan {
+  week_start: string
+  posts: PlanPost[]
+}
+
+export interface GeneratePlanRequest {
+  niche: string
+  tone: Tone
+  frequency: number     // 1-3 posts per platform per day
+  platforms: string[]
+  language?: string
+  week_start: string    // ISO date of Monday e.g. "2026-05-18"
+}
+
+// Batch captions
+export interface CaptionPostInput {
+  day: number
+  platform: string
+  idea: string
+}
+
+export interface GenerateCaptionsRequest {
+  niche: string
+  tone: string
+  posts: CaptionPostInput[]
+}
+
+export interface CaptionItem {
+  day: number
+  platform: string
+  idea: string
+  caption: string
+  hashtags: string[]
+}
+
+export interface CaptionsResponse {
+  captions: CaptionItem[]
+}
+
+// Legacy shape (kept for backward compat with AiPlanPage)
 export interface DayPost {
   platform: string
   content_idea: string
@@ -53,19 +117,6 @@ export interface DayPost {
 export interface PlanDay {
   day: string
   posts: DayPost[]
-}
-
-export interface WeeklyPlan {
-  week_start: string
-  days: PlanDay[]
-}
-
-export interface GeneratePlanRequest {
-  niche: string
-  frequency: number
-  tone: string
-  platforms: string[]
-  language?: string
 }
 
 export interface GenerateCaptionRequest {

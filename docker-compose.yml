@@ -48,6 +48,9 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-contentflow}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-contentflow}
       REDIS_URL: redis://redis:6379/0
+      OLLAMA_URL: http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - media_data:/app/media
     depends_on:
@@ -76,6 +79,9 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-contentflow}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-contentflow}
       REDIS_URL: redis://redis:6379/0
+      OLLAMA_URL: http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - media_data:/app/media
     depends_on:

@@ -1,20 +1,43 @@
-import axios from 'axios'
-import { api } from './api'
+import { api, apiV2 } from './api'
 import type {
   GeneratePlanRequest, WeeklyPlan,
+  GenerateCaptionsRequest, CaptionsResponse,
   GenerateCaptionRequest, CaptionResponse,
   HashtagRequest, HashtagResponse,
   IdeasResponse,
   ToneAnalyzeRequest, ToneAnalyzeResponse,
 } from '@/types/api.types'
 
-function getV2BaseUrl() {
-  return (import.meta.env.VITE_API_URL || '/api/v1').replace('/v1', '/v2')
+export interface PlannedPost {
+  post_id: string
+  caption: string
+  platforms: string[]
+  scheduled_at: string | null
+  format?: string
+  topic?: string
+  status: string
+}
+
+export interface AgentAction {
+  type: 'create_post' | 'create_plan' | 'schedule_post' | 'list_posts' | 'list_schedule' | 'none'
+  result?: Record<string, unknown> & { posts?: PlannedPost[]; count?: number }
+  error?: string
+}
+
+export interface AgentChatResponse {
+  message: { role: string; content: string }
+  model: string
+  action?: AgentAction
 }
 
 export const aiService = {
   async generatePlan(payload: GeneratePlanRequest): Promise<WeeklyPlan> {
     const { data } = await api.post<WeeklyPlan>('/ai/generate-plan', payload)
+    return data
+  },
+
+  async generateCaptions(payload: GenerateCaptionsRequest): Promise<CaptionsResponse> {
+    const { data } = await api.post<CaptionsResponse>('/ai/generate-captions', payload)
     return data
   },
 
@@ -29,28 +52,32 @@ export const aiService = {
   },
 
   async suggestHashtags(payload: HashtagRequest): Promise<HashtagResponse> {
-    const BASE_URL = getV2BaseUrl()
-    const token = localStorage.getItem('access_token')
-    const { data } = await axios.post<HashtagResponse>(
-      `${BASE_URL}/ai/hashtags`,
-      payload,
-      {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      }
-    )
+    const { data } = await apiV2.post<HashtagResponse>('/ai/hashtags', payload)
     return data
   },
 
   async analyzeTone(payload: ToneAnalyzeRequest): Promise<ToneAnalyzeResponse> {
-    const BASE_URL = getV2BaseUrl()
-    const token = localStorage.getItem('access_token')
-    const { data } = await axios.post<ToneAnalyzeResponse>(
-      `${BASE_URL}/ai/analyze-tone`,
-      payload,
-      {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      }
-    )
+    const { data } = await apiV2.post<ToneAnalyzeResponse>('/ai/analyze-tone', payload)
+    return data
+  },
+
+  async chat(messages: { role: string; content: string }[], model?: string): Promise<{ message: { role: string; content: string }; model: string }> {
+    const { data } = await apiV2.post('/ai/chat', { messages, model: model || 'llama3.2' })
+    return data
+  },
+
+  async planChat(messages: { role: string; content: string }[], model?: string): Promise<{ message: { role: string; content: string }; model: string }> {
+    const { data } = await apiV2.post('/ai/plan-chat', { messages, model: model || 'llama3.2' })
+    return data
+  },
+
+  async agentChat(messages: { role: string; content: string }[], model?: string): Promise<AgentChatResponse> {
+    const { data } = await apiV2.post('/ai/agent-chat', { messages, model: model || 'llama3.2' })
+    return data
+  },
+
+  async listModels(): Promise<{ models: string[]; default: string; status: string }> {
+    const { data } = await apiV2.get('/ai/models')
     return data
   },
 }

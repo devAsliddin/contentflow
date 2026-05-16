@@ -1,5 +1,5 @@
 import { api } from './api'
-import type { Post, CreatePostRequest, UpdatePostRequest } from '@/types/post.types'
+import type { Post, CreatePostRequest, UpdatePostRequest, PostReview } from '@/types/post.types'
 
 export const postsService = {
   async list(params?: { skip?: number; limit?: number; status?: string }): Promise<Post[]> {
@@ -17,6 +17,11 @@ export const postsService = {
     return data
   },
 
+  async review(payload: CreatePostRequest): Promise<PostReview> {
+    const { data } = await api.post<PostReview>('/posts/review', payload)
+    return data
+  },
+
   async update(id: string, payload: UpdatePostRequest): Promise<Post> {
     const { data } = await api.put<Post>(`/posts/${id}`, payload)
     return data
@@ -26,7 +31,20 @@ export const postsService = {
     await api.delete(`/posts/${id}`)
   },
 
-  async triggerNow(id: string): Promise<{ task_id: string; message: string }> {
+  async triggerNow(id: string): Promise<{
+    task_id: string | null
+    message: string
+    status: 'published' | 'failed'
+    errors: string[]
+    results: Array<{
+      platform: string
+      account_id: string | null
+      account_name: string | null
+      status: 'success' | 'failed'
+      external_id?: string | null
+      error?: string
+    }>
+  }> {
     const { data } = await api.post(`/scheduler/trigger/${id}`)
     return data
   },

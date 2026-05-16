@@ -1,5 +1,5 @@
 [Unit]
-Description=ContentFlow FastAPI Backend
+Description=ContentFlow FastAPI Backend (Gunicorn + Uvicorn workers)
 After=network.target postgresql.service redis.service
 Wants=postgresql.service redis.service
 
@@ -9,12 +9,18 @@ User=contentflow
 Group=contentflow
 WorkingDirectory=/var/www/contentflow/backend
 EnvironmentFile=/etc/contentflow/.env
-ExecStart=/var/www/contentflow/venv/bin/uvicorn app.main:app \
-    --host 0.0.0.0 \
-    --port 8000 \
+ExecStart=/var/www/contentflow/venv/bin/gunicorn app.main:app \
+    --worker-class uvicorn.workers.UvicornWorker \
     --workers 2 \
+    --bind 127.0.0.1:8000 \
+    --timeout 120 \
+    --keepalive 5 \
+    --max-requests 1000 \
+    --max-requests-jitter 100 \
     --log-level info \
-    --access-log
+    --access-logfile /var/log/contentflow/access.log \
+    --error-logfile  /var/log/contentflow/error.log
+ExecReload=/bin/kill -s HUP $MAINPID
 Restart=always
 RestartSec=5
 StandardOutput=journal
@@ -24,6 +30,8 @@ SyslogIdentifier=contentflow-backend
 # Security hardening
 NoNewPrivileges=yes
 PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=/var/www/contentflow/media /var/log/contentflow
 
 [Install]
 WantedBy=multi-user.target
