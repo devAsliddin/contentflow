@@ -1,0 +1,40 @@
+# Secrets — never bake into image
+.env
+*.env
+.env.*
+!.env.example
+
+# Python
+backend/venv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/**/*.pyc
+backend/**/*.pyo
+backend/.pytest_cache/
+backend/tests/
+
+# Node / Frontend build artefacts
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Logs
+.logs/
+*.log
+
+# Git
+.git/
+.gitignore
+
+# Docs / planning
+information/
+design/
+*.md
+!README.md

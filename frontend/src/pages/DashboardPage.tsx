@@ -563,16 +563,16 @@ export default function DashboardPage() {
             </div>
             <div className="space-y-3 relative">
               {(['instagram', 'tiktok', 'telegram'] as PlatformKind[]).map((kind) => {
-                const sums: Record<PlatformKind, number> = {
+                const sums: Partial<Record<PlatformKind, number>> = {
                   instagram: comparison?.reduce((a, d) => a + d.instagram, 0) ?? 0,
                   tiktok:    comparison?.reduce((a, d) => a + d.tiktok, 0) ?? 0,
                   telegram:  comparison?.reduce((a, d) => a + d.telegram, 0) ?? 0,
                 }
                 const allMax = Math.max(...Object.values(sums), 1)
-                const val = sums[kind]
+                const val = sums[kind] ?? 0
                 const w = Math.round((val / allMax) * 100)
                 const color = PLATFORM_COLORS[kind]
-                const labels: Record<PlatformKind, string> = { instagram: 'Instagram', tiktok: 'TikTok', telegram: 'Telegram' }
+                const labels: Partial<Record<PlatformKind, string>> = { instagram: 'Instagram', tiktok: 'TikTok', telegram: 'Telegram' }
                 return (
                   <div key={kind}>
                     <div className="flex items-center justify-between mb-1.5">

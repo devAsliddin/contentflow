@@ -97,7 +97,7 @@ services:
       dockerfile: Dockerfile.backend
     container_name: contentflow_celery_beat
     restart: unless-stopped
-    command: celery -A app.tasks.celery_app beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    command: celery -A app.tasks.celery_app beat --loglevel=info --schedule /tmp/celerybeat-schedule
     env_file: .env
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-contentflow}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-contentflow}
@@ -107,6 +107,18 @@ services:
         condition: service_healthy
     networks:
       - internal
+
+  # ─── Certbot (SSL certificate management) ─────────────────────────────────
+  certbot:
+    image: certbot/certbot:latest
+    container_name: contentflow_certbot
+    volumes:
+      - certbot_certs:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    # Run manually: docker compose run --rm certbot certonly --webroot ...
+    entrypoint: /bin/sh -c "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h; done"
+    networks:
+      - public
 
   # ─── React Frontend (Nginx) ────────────────────────────────────────────────
   frontend:
@@ -130,8 +142,9 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./devops/nginx/contentflow.conf:/etc/nginx/conf.d/contentflow.conf:ro
-      - ./devops/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./devops/nginx/nginx-compose.conf:/etc/nginx/conf.d/contentflow.conf:ro
+      - ./devops/nginx/empty.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./devops/nginx/nginx-docker-http.conf:/etc/nginx/nginx.conf:ro
       - media_data:/var/www/media:ro
       - certbot_certs:/etc/letsencrypt:ro
       - certbot_www:/var/www/certbot:ro
