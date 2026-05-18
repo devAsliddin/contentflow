@@ -17,7 +17,7 @@ from app.services.ollama_client import call_ollama_chat, ollama_url
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-DEFAULT_OLLAMA_MODEL = "llama3.2"
+DEFAULT_OLLAMA_MODEL = "qwen2.5:0.5b"
 DEFAULT_CLAUDE_MODEL = "claude-haiku-4-5-20251001"
 
 # ── System prompts ────────────────────────────────────────────────────────────
@@ -170,25 +170,7 @@ async def plan_chat(
 async def list_models(
     current_user: User = Depends(get_current_user),
 ):
-    """List available AI models."""
-    settings = get_settings()
-
-    if settings.anthropic_api_key:
-        return {
-            "models": ["claude-haiku-4-5-20251001", "claude-sonnet-4-20250514"],
-            "default": "claude-haiku-4-5-20251001",
-            "status": "ok",
-            "provider": "anthropic",
-        }
-
-    if settings.openrouter_api_key:
-        return {
-            "models": [settings.openrouter_model, "openrouter/free"],
-            "default": settings.openrouter_model,
-            "status": "ok",
-            "provider": "openrouter",
-        }
-
+    """List available AI models — local Ollama has priority."""
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.get(f"{ollama_url()}/api/tags")
@@ -201,16 +183,12 @@ async def list_models(
                         "status": "ok",
                         "provider": "ollama",
                     }
-        return {
-            "models": [DEFAULT_OLLAMA_MODEL],
-            "default": DEFAULT_OLLAMA_MODEL,
-            "status": "offline",
-            "provider": "ollama",
-        }
     except Exception:
-        return {
-            "models": [DEFAULT_OLLAMA_MODEL],
-            "default": DEFAULT_OLLAMA_MODEL,
-            "status": "offline",
-            "provider": "none",
-        }
+        pass
+
+    return {
+        "models": [DEFAULT_OLLAMA_MODEL],
+        "default": DEFAULT_OLLAMA_MODEL,
+        "status": "offline",
+        "provider": "none",
+    }

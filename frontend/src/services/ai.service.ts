@@ -62,17 +62,17 @@ export const aiService = {
   },
 
   async chat(messages: { role: string; content: string }[], model?: string): Promise<{ message: { role: string; content: string }; model: string }> {
-    const { data } = await apiV2.post('/ai/chat', { messages, model: model || 'llama3.2' })
+    const { data } = await apiV2.post('/ai/chat', { messages, model: model || 'qwen2.5:0.5b' })
     return data
   },
 
   async planChat(messages: { role: string; content: string }[], model?: string): Promise<{ message: { role: string; content: string }; model: string }> {
-    const { data } = await apiV2.post('/ai/plan-chat', { messages, model: model || 'llama3.2' })
+    const { data } = await apiV2.post('/ai/plan-chat', { messages, model: model || 'qwen2.5:0.5b' })
     return data
   },
 
   async agentChat(messages: { role: string; content: string }[], model?: string): Promise<AgentChatResponse> {
-    const { data } = await apiV2.post('/ai/agent-chat', { messages, model: model || 'llama3.2' })
+    const { data } = await apiV2.post('/ai/agent-chat', { messages, model: model || 'qwen2.5:0.5b' })
     return data
   },
 

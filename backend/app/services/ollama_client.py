@@ -79,6 +79,36 @@ async def call_ollama_chat(
     include_error_body: bool = True,
 ) -> str:
     settings = get_settings()
+
+    # Try local Ollama first (unless the model name is explicitly an OpenRouter path like "openai/…")
+    is_openrouter_model = "/" in model or model.startswith("openrouter/")
+    if not is_openrouter_model:
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                resp = await client.post(
+                    f"{ollama_url()}/api/chat",
+                    json=_chat_payload(model, messages),
+                )
+
+                if resp.status_code >= 500:
+                    logger.warning(
+                        "Ollama returned %s, retrying with reduced context: %s",
+                        resp.status_code,
+                        resp.text[:200],
+                    )
+                    resp = await client.post(
+                        f"{ollama_url()}/api/chat",
+                        json=_chat_payload(model, messages, cpu_fallback=True),
+                    )
+
+                if resp.status_code == 200:
+                    return resp.json()["message"]["content"]
+
+                logger.warning("Local Ollama failed (%s), trying OpenRouter", resp.status_code)
+        except httpx.ConnectError:
+            logger.warning("Local Ollama not reachable, trying OpenRouter")
+
+    # OpenRouter fallback (when local Ollama unavailable or model is explicit OpenRouter path)
     if settings.openrouter_api_key:
         try:
             return await _call_openrouter_chat(
@@ -88,38 +118,12 @@ async def call_ollama_chat(
                 include_error_body=include_error_body,
             )
         except HTTPException as exc:
-            logger.warning("OpenRouter failed, falling back to local Ollama: %s", exc.detail)
+            logger.warning("OpenRouter also failed: %s", exc.detail)
 
-    try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.post(
-                f"{ollama_url()}/api/chat",
-                json=_chat_payload(model, messages),
-            )
-
-            if resp.status_code >= 500:
-                logger.warning(
-                    "Ollama returned %s, retrying with CPU fallback: %s",
-                    resp.status_code,
-                    resp.text[:200],
-                )
-                resp = await client.post(
-                    f"{ollama_url()}/api/chat",
-                    json=_chat_payload(model, messages, cpu_fallback=True),
-                )
-
-            if resp.status_code != 200:
-                detail = f"Ollama xatosi: {resp.status_code}"
-                if include_error_body:
-                    detail += f" - {resp.text[:200]}"
-                raise HTTPException(status_code=502, detail=detail)
-
-            return resp.json()["message"]["content"]
-    except httpx.ConnectError:
-        raise HTTPException(
-            status_code=503,
-            detail="Ollama ishlamayapti. Terminalda: ollama serve",
-        )
+    raise HTTPException(
+        status_code=502,
+        detail="AI xizmati mavjud emas. Ollama ishlamayapti va OpenRouter ham javob bermadi.",
+    )
 
 
 async def call_ollama_vision(

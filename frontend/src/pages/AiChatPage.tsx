@@ -195,7 +195,7 @@ export default function AiChatPage() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [selectedModel, setSelectedModel] = useState('llama3.2')
+  const [selectedModel, setSelectedModel] = useState('qwen2.5:0.5b')
   const [modelDropOpen, setModelDropOpen] = useState(false)
   const [agentMode, setAgentMode] = useState(true)
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -281,7 +281,7 @@ export default function AiChatPage() {
     }
   }
 
-  const models = modelsData?.models ?? ['llama3.2']
+  const models = modelsData?.models ?? ['qwen2.5:0.5b']
   const quickPrompts = agentMode ? QUICK_PROMPTS_AGENT : QUICK_PROMPTS_CHAT
 
   return (
@@ -364,7 +364,7 @@ export default function AiChatPage() {
           <div>
             <span className="font-medium">Ollama ishlamayapti.</span>{' '}
             Terminalda <code className="bg-black/30 rounded px-1">ollama serve</code> ni ishga tushiring, so'ng{' '}
-            <code className="bg-black/30 rounded px-1">ollama pull llama3.2</code> yoki boshqa model yuklab oling.
+            <code className="bg-black/30 rounded px-1">ollama pull qwen2.5:0.5b</code> yoki boshqa model yuklab oling.
           </div>
         </div>
       )}

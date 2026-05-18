@@ -20,7 +20,7 @@ from app.services.ollama_client import call_ollama_chat
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-DEFAULT_MODEL = "llama3.2"
+DEFAULT_MODEL = "qwen2.5:0.5b"
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
