@@ -417,18 +417,26 @@ export default function NewPostPage() {
   }
 
   async function handleGenerate() {
-    if (!caption && accounts.length === 0) {
-      toast.error('Add a topic or connect accounts first')
+    if (!mediaUrl && !caption && accounts.length === 0) {
+      toast.error('Rasm yuklang yoki mavzu kiriting')
       return
     }
     setGenerating(true)
     try {
-      const platform = allAccounts[0]?.kind || 'instagram'
-      const result = await aiService.generateCaption({ topic: caption || 'lifestyle', platform, tone: 'casual' })
-      setCaption(result.caption + '\n\n' + result.hashtags.map((h) => `#${h}`).join(' '))
-      toast.success('Caption generated')
+      const platform = [...selectedKinds][0] || allAccounts[0]?.kind || 'instagram'
+      const result = await aiService.generateCaption({
+        topic: caption || 'content',
+        platform,
+        tone: 'casual',
+        image_url: mediaUrl || undefined,
+      })
+      const tags = result.hashtags.length > 0
+        ? '\n\n' + result.hashtags.map((h) => `#${h}`).join(' ')
+        : ''
+      setCaption(result.caption + tags)
+      toast.success(mediaUrl ? 'Rasm asosida caption yaratildi' : 'Caption yaratildi')
     } catch {
-      toast.error('Failed to generate caption')
+      toast.error('Caption yaratib bo\'lmadi')
     } finally {
       setGenerating(false)
     }
@@ -482,7 +490,7 @@ export default function NewPostPage() {
       } else {
         toast.success('Post schedule qilindi')
       }
-      navigate('/')
+      navigate('/dashboard')
     } catch (err: any) {
       toast.error(err?.response?.data?.detail || 'Failed to create post')
     } finally {

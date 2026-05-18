@@ -11,7 +11,7 @@ from app.services.ollama_client import call_ollama_chat
 # Model constants per spec
 SONNET_MODEL = "claude-sonnet-4-20250514"
 HAIKU_MODEL = "claude-haiku-4-5-20251001"
-OLLAMA_DEFAULT = "llama3.2"
+OLLAMA_DEFAULT = "qwen2.5:0.5b"
 
 # Optimal posting times per platform
 OPTIMAL_TIMES: dict[str, list[str]] = {
@@ -289,9 +289,52 @@ Return JSON:
             messages=[{"role": "user", "content": user_prompt}],
             system=system_prompt,
         )
-        result = _parse_json(response.content[0].text)
+        raw_text = response.content[0].text.strip()
+        try:
+            result = _parse_json(raw_text)
+        except (json.JSONDecodeError, ValueError):
+            # Model returned plain text — wrap it as caption
+            result = {"caption": raw_text, "hashtags": [], "character_count": len(raw_text)}
 
         # Ensure character_count is accurate
+        if "caption" in result:
+            result["character_count"] = len(result["caption"])
+
+        return result
+
+    async def generate_caption_from_image(
+        self,
+        image_path: str,
+        platform: str,
+        tone: str,
+        language: str = "en",
+    ) -> dict:
+        """Generate a caption by visually analyzing the uploaded image."""
+        from app.services.ollama_client import call_ollama_vision
+
+        platform_limits = {
+            "instagram": 2200, "tiktok": 2200, "telegram": 4096,
+            "facebook": 63206, "linkedin": 3000, "youtube": 5000, "twitter": 280,
+        }
+        char_limit = platform_limits.get(platform, 2200)
+
+        prompt = (
+            f"You are a professional social media copywriter for {platform}.\n"
+            f"Look at this image carefully and write a {tone} caption that describes or promotes what you see.\n"
+            f"Language: {language}\n"
+            f"Keep the caption under {char_limit} characters.\n\n"
+            f"Return JSON only, no explanation:\n"
+            f'{{"caption": "the caption text", "hashtags": ["tag1", "tag2", "tag3"], "character_count": 0}}'
+        )
+
+        raw_text = await call_ollama_vision(image_path, prompt, model="gemma3:4b")
+
+        try:
+            result = _parse_json(raw_text)
+        except (json.JSONDecodeError, ValueError):
+            text = raw_text.strip()
+            result = {"caption": text, "hashtags": [], "character_count": len(text)}
+
         if "caption" in result:
             result["character_count"] = len(result["caption"])
 

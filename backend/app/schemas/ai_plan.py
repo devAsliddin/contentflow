@@ -61,10 +61,11 @@ class CaptionsResponse(BaseModel):
 # ── Single caption ────────────────────────────────────────────────────────────
 
 class GenerateCaptionRequest(BaseModel):
-    topic: str
+    topic: str = ""
     platform: str
     tone: str
     language: str = "en"
+    image_url: str | None = None  # relative URL like /media/filename.jpg
 
 
 class CaptionResponse(BaseModel):

@@ -1,0 +1,13 @@
+{
+  "agent": "frontend-agent",
+  "task_id": "FE-CAL-001",
+  "status": "completed",
+  "files_changed": [
+    "frontend/src/pages/CalendarPage.tsx",
+    "frontend/src/components/ui/PlatformChip.tsx",
+    "frontend/src/services/ai.service.ts",
+    "frontend/src/types/api.types.ts"
+  ],
+  "notes": "Added AI Plan button and AiPlanModal to CalendarPage. Two-step pipeline: generate-plan then generate-captions batch. Per-post confirm/dismiss/regenerate in review step. Schedules confirmed posts via postsService.create. Updated PlatformChip with all 7 platforms (facebook, linkedin, youtube, twitter added). Added generateCaptions to ai.service.ts. Added PlanPost, CaptionItem, GenerateCaptionsRequest, CaptionsResponse, Tone, Platform types to api.types.ts.",
+  "timestamp": "2026-05-16T12:10:00Z"
+}

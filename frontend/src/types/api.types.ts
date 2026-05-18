@@ -120,10 +120,11 @@ export interface PlanDay {
 }
 
 export interface GenerateCaptionRequest {
-  topic: string
+  topic?: string
   platform: string
   tone: string
   language?: string
+  image_url?: string
 }
 
 export interface CaptionResponse {

@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay,
   addMonths, subMonths, startOfWeek, endOfWeek, setHours, setMinutes,
-  parseISO, addDays,
+  addDays,
 } from 'date-fns'
 import {
   ChevronLeft, ChevronRight, X, Filter, Plus, CalendarX, Repeat2,
@@ -14,7 +14,6 @@ import { postsService } from '@/services/posts.service'
 import { workflowsService } from '@/services/workflows.service'
 import { aiService } from '@/services/ai.service'
 import { getPlatformFromEntry } from '@/utils/platform.utils'
-import { formatDateTime } from '@/utils/date.utils'
 import RecycleModal from '@/components/posts/RecycleModal'
 import { cn } from '@/utils/cn'
 import PlatformChip, { PLATFORM_META, type PlatformKind } from '@/components/ui/PlatformChip'

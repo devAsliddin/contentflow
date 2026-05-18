@@ -4,12 +4,20 @@ export const PLATFORM_COLORS: Record<Platform, string> = {
   instagram: '#E1306C',
   tiktok: '#69C9D0',
   telegram: '#229ED9',
+  facebook: '#1877F2',
+  linkedin: '#0077B5',
+  youtube: '#FF0000',
+  twitter: '#000000',
 }
 
 export const PLATFORM_LABELS: Record<Platform, string> = {
   instagram: 'Instagram',
   tiktok: 'TikTok',
   telegram: 'Telegram',
+  facebook: 'Facebook',
+  linkedin: 'LinkedIn',
+  youtube: 'YouTube',
+  twitter: 'X / Twitter',
 }
 
 export function parsePlatformEntry(entry: string): { platform: Platform; accountId: string } {

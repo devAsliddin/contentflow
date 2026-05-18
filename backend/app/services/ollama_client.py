@@ -1,4 +1,6 @@
+import base64
 import logging
+from pathlib import Path
 
 import httpx
 from fastapi import HTTPException
@@ -64,8 +66,7 @@ def _chat_payload(model: str, messages: list[dict], *, cpu_fallback: bool = Fals
     }
     if cpu_fallback:
         payload["options"] = {
-            "num_ctx": 1024,
-            "num_gpu": 0,
+            "num_ctx": 512,
         }
     return payload
 
@@ -119,3 +120,39 @@ async def call_ollama_chat(
             status_code=503,
             detail="Ollama ishlamayapti. Terminalda: ollama serve",
         )
+
+
+async def call_ollama_vision(
+    image_path: str,
+    prompt: str,
+    model: str = "gemma3:4b",
+    timeout: int = 180,
+) -> str:
+    """Send an image to a vision-capable Ollama model and return the response."""
+    img_bytes = Path(image_path).read_bytes()
+    img_b64 = base64.b64encode(img_bytes).decode()
+
+    payload = {
+        "model": model,
+        "messages": [
+            {
+                "role": "user",
+                "content": prompt,
+                "images": [img_b64],
+            }
+        ],
+        "stream": False,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post(f"{ollama_url()}/api/chat", json=payload)
+
+        if resp.status_code != 200:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Vision model xatosi: {resp.status_code} - {resp.text[:300]}",
+            )
+        return resp.json()["message"]["content"]
+    except httpx.ConnectError:
+        raise HTTPException(status_code=503, detail="Ollama ishlamayapti. Terminalda: ollama serve")

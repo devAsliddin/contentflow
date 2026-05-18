@@ -1,7 +1,9 @@
+import os
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
+from app.config import get_settings
 from app.database import get_db
 from app.models.user import User
 from app.models.post import Post
@@ -65,16 +67,34 @@ async def generate_caption(
     data: GenerateCaptionRequest,
     current_user: User = Depends(get_current_user),
 ):
-    """Generate a single caption — used for per-post regeneration."""
+    """Generate a caption — uses vision AI if image is provided, text AI otherwise."""
     try:
         service = AIService()
-        result = await service.generate_caption(
-            topic=data.topic,
-            platform=data.platform,
-            tone=data.tone,
-            language=data.language,
-        )
+
+        if data.image_url:
+            # Resolve the media file path from the URL (e.g. /media/foo.jpg)
+            settings = get_settings()
+            filename = os.path.basename(data.image_url.split("?")[0])
+            image_path = os.path.join(settings.media_dir, filename)
+            if not os.path.isfile(image_path):
+                raise HTTPException(status_code=400, detail=f"Image not found on server: {filename}")
+            result = await service.generate_caption_from_image(
+                image_path=image_path,
+                platform=data.platform,
+                tone=data.tone,
+                language=data.language,
+            )
+        else:
+            result = await service.generate_caption(
+                topic=data.topic or "content",
+                platform=data.platform,
+                tone=data.tone,
+                language=data.language,
+            )
+
         return result
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Caption generation failed: {str(e)}")
 

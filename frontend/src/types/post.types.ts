@@ -1,4 +1,11 @@
-export type Platform = 'instagram' | 'tiktok' | 'telegram'
+export type Platform =
+  | 'instagram'
+  | 'tiktok'
+  | 'telegram'
+  | 'facebook'
+  | 'linkedin'
+  | 'youtube'
+  | 'twitter'
 export type MediaType = 'image' | 'video'
 export type PostStatus = 'draft' | 'scheduled' | 'publishing' | 'published' | 'failed'
 export type PlatformPlacement = 'feed' | 'reel' | 'story' | 'post'
