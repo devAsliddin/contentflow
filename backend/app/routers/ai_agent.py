@@ -52,7 +52,9 @@ class AgentChatResponse(BaseModel):
 
 
 async def _call_ollama(messages: list[dict], model: str) -> str:
-    return await call_ollama_chat(messages, model, include_error_body=False)
+    # Always use a local model — strip out any OpenRouter/cloud model paths
+    local_model = model if "/" not in model else DEFAULT_MODEL
+    return await call_ollama_chat(messages, local_model, include_error_body=False)
 
 
 def _extract_json(text: str) -> dict | None:

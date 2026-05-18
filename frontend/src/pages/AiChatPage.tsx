@@ -209,7 +209,12 @@ export default function AiChatPage() {
   })
 
   useEffect(() => {
-    if (modelsData?.default) setSelectedModel(modelsData.default)
+    if (modelsData?.models) {
+      // Prefer local Ollama models (no '/' in name); fall back to default only if local
+      const localModels = modelsData.models.filter((m: string) => !m.includes('/'))
+      const best = localModels[0] ?? (modelsData.default?.includes('/') ? 'qwen2.5:0.5b' : modelsData.default)
+      if (best) setSelectedModel(best)
+    }
   }, [modelsData])
 
   useEffect(() => {
@@ -281,7 +286,7 @@ export default function AiChatPage() {
     }
   }
 
-  const models = modelsData?.models ?? ['qwen2.5:0.5b']
+  const models = (modelsData?.models ?? ['qwen2.5:0.5b']).filter((m: string) => !m.includes('/'))
   const quickPrompts = agentMode ? QUICK_PROMPTS_AGENT : QUICK_PROMPTS_CHAT
 
   return (

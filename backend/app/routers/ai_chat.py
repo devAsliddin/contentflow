@@ -113,11 +113,12 @@ async def _call_ai(messages: list[dict], model: str, system: str | None = None) 
         except Exception as exc:
             logger.warning("Anthropic chat failed, falling back to Ollama: %s", exc)
 
-    # Ollama fallback
+    # Ollama fallback — force local model if an OpenRouter path was passed
+    local_model = model if "/" not in model else DEFAULT_OLLAMA_MODEL
     all_messages = list(messages)
     if system and (not all_messages or all_messages[0].get("role") != "system"):
         all_messages = [{"role": "system", "content": system}] + all_messages
-    return await call_ollama_chat(all_messages, model)
+    return await call_ollama_chat(all_messages, local_model)
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
