@@ -6,6 +6,9 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
 from app.config import get_settings
 from app.database import engine, Base
@@ -13,6 +16,8 @@ from app.routers import auth, posts, accounts, ai_plan, scheduler, analytics, up
 from app.routers import oauth, ai_v2, analytics_v2, ai_v2_ext, workflows, ai_chat, ai_agent
 
 settings = get_settings()
+limiter = Limiter(key_func=get_remote_address)
+
 logging.basicConfig(
     level=logging.INFO if settings.is_production else logging.DEBUG,
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
@@ -50,6 +55,9 @@ app = FastAPI(
     openapi_url=_openapi_url,
     lifespan=lifespan,
 )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS — origins from settings (comma-separated in env)
 app.add_middleware(

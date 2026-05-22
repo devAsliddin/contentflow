@@ -19,3 +19,4 @@ anthropic>=0.25.1
 instagrapi>=2.0.0
 cryptography>=42.0.5
 requests>=2.31.0
+slowapi>=0.1.9
