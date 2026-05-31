@@ -45,8 +45,8 @@ async def login(request: Request, data: UserLogin, db: AsyncSession = Depends(ge
     result = await db.execute(select(User).where(User.email == data.email))
     user = result.scalar_one_or_none()
 
-    # Always run verify_password to prevent timing attacks
-    dummy_hash = "$2b$12$eImiTXuWVxfM37uY4JANjQ=="
+    # Always run verify_password to prevent timing attacks (dummy is a valid bcrypt hash)
+    dummy_hash = "$2b$12$4tRrnB.Fx.56HtKTmYHrYu5aN4GDCnBjxInqcfMGoDVusaDUK3hn."
     password_ok = verify_password(data.password, user.hashed_password if user else dummy_hash)
 
     if not user or not password_ok:
@@ -92,7 +92,8 @@ async def update_me(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if data.full_name is not None:
+    # Use model_fields_set to distinguish "omitted" (skip) from "explicit null" (clear)
+    if "full_name" in data.model_fields_set:
         current_user.full_name = data.full_name
     db.add(current_user)
     await db.flush()

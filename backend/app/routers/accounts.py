@@ -164,6 +164,49 @@ async def connect_account(
     return AccountOut.model_validate(account)
 
 
+@router.get("/connected")
+async def list_connected_accounts(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return connected platforms with display username and avatar_url for preview headers."""
+    result = await db.execute(
+        select(Account).where(Account.user_id == current_user.id, Account.is_active == True)
+        .order_by(Account.platform.asc(), Account.created_at.asc())
+    )
+    accounts = result.scalars().all()
+
+    seen_platforms: set[str] = set()
+    output = []
+    for account in accounts:
+        platform = account.platform
+        if platform in seen_platforms:
+            continue
+        seen_platforms.add(platform)
+
+        credentials = decrypt_credentials(account.credentials)
+
+        # Extract a meaningful username per platform
+        username = account.account_name
+        avatar_url: str | None = None
+
+        if platform == "instagram":
+            ig_user = credentials.get("ig_username") or account.account_name
+            username = ig_user if ig_user else account.account_name
+        elif platform == "telegram":
+            username = credentials.get("channel_id") or account.account_name
+        elif platform in ("tiktok", "youtube", "facebook", "linkedin", "twitter"):
+            username = credentials.get("username") or credentials.get("account_name") or account.account_name
+
+        output.append({
+            "platform": platform,
+            "username": username,
+            "avatar_url": avatar_url,
+        })
+
+    return output
+
+
 @router.get("", response_model=list[AccountOut])
 async def list_accounts(
     platform: str | None = Query(None),
@@ -222,7 +265,7 @@ async def instagram_login(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Connect Instagram account using username + password (instagrapi session)."""
+    """Connect Instagram account — stores credentials locally, no API verification."""
     count_result = await db.execute(
         select(func.count()).where(
             Account.user_id == current_user.id,
@@ -233,19 +276,9 @@ async def instagram_login(
     if count_result.scalar_one() >= MAX_ACCOUNTS_PER_PLATFORM:
         raise HTTPException(status_code=400, detail=f"Maximum {MAX_ACCOUNTS_PER_PLATFORM} Instagram accounts allowed")
 
-    from app.services.instagram_service import instagram_login as ig_login
-    try:
-        result = await __import__("asyncio").get_event_loop().run_in_executor(
-            None, lambda: ig_login(data.username, data.password)
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Instagram login error: {e}")
-
     credentials = {
-        "ig_session": result["session"],
-        "ig_user_id": result["user_id"],
+        "ig_username": data.username,
+        "ig_password": data.password,
     }
     encrypted = encrypt_credentials(credentials)
 
@@ -253,7 +286,7 @@ async def instagram_login(
     account = Account(
         user_id=current_user.id,
         platform="instagram",
-        account_name=data.account_name or result["username"],
+        account_name=data.account_name or data.username,
         credentials=encrypted,
         oauth_migrated=True,
         oauth_migrated_at=datetime.now(tz.utc),

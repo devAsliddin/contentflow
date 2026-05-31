@@ -13,6 +13,7 @@ import AdminPage from '@/pages/AdminPage'
 import LoginPage from '@/pages/LoginPage'
 import RegisterPage from '@/pages/RegisterPage'
 import DraftsPage from '@/pages/DraftsPage'
+import PreviewScreen from '@/components/preview/PreviewScreen'
 import ApprovalPage from '@/pages/ApprovalPage'
 import TemplatesPage from '@/pages/TemplatesPage'
 
@@ -49,6 +50,7 @@ export default function App() {
         >
           <Route index element={<DashboardPage />} />
           <Route path="new-post" element={<NewPostPage />} />
+          <Route path="preview" element={<PreviewScreen />} />
           <Route path="accounts" element={<AccountsPage />} />
           <Route path="calendar" element={<CalendarPage />} />
           <Route path="ai-plan" element={<Navigate to="/dashboard/ai-chat" replace />} />

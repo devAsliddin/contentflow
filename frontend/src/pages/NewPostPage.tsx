@@ -6,18 +6,22 @@ import {
   UploadCloud, X, Play, Scissors, Captions, Image as ImageIcon, Music,
   Bold, Italic, Hash, AtSign, Smile, Sparkles, Loader2, Send, Languages,
   Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Calendar, Repeat2,
-  MessageSquare, MapPin, UserPlus, Info, Eye, AlertTriangle,
+  MessageSquare, MapPin, UserPlus, Info, Eye, AlertTriangle, Crop,
 } from 'lucide-react'
 import { accountsService } from '@/services/accounts.service'
 import { postsService } from '@/services/posts.service'
 import { aiService } from '@/services/ai.service'
+import { previewService } from '@/services/preview.service'
 import PlatformChip, { PLATFORM_META, type PlatformKind } from '@/components/ui/PlatformChip'
 import Avatar from '@/components/ui/Avatar'
 import ImgPlaceholder from '@/components/ui/ImgPlaceholder'
 import StatusPill from '@/components/ui/StatusPill'
 import UploadZone from '@/components/posts/UploadZone'
+import CropModal from '@/components/posts/CropModal'
+import PreviewSwitcher from '@/components/preview/PreviewSwitcher'
 import type { Account } from '@/types/account.types'
 import type { AspectRatio, CreatePostRequest, PlatformOptions, PlatformPlacement, PostReview } from '@/types/post.types'
+import type { ContentType, PostAspect } from '@/components/preview/types'
 
 const PEAK_SLOTS = ['07:15', '12:00', '15:30', '18:00', '21:30']
 const ASPECTS: AspectRatio[] = ['9:16', '16:9', '1:1', '4:5']
@@ -322,6 +326,9 @@ export default function NewPostPage() {
   const [submitting, setSubmitting] = useState(false)
   const [reviewing, setReviewing] = useState(false)
   const [review, setReview] = useState<PostReview | null>(null)
+  const [showCrop, setShowCrop] = useState(false)
+  const [contentType, setContentType] = useState<ContentType>('post')
+  const [postAspect, setPostAspect] = useState<PostAspect>('1:1')
   const [platformOptions, setPlatformOptions] = useState<PlatformOptions>({
     instagram: { placement: 'feed', aspect_ratio: '1:1' },
     tiktok: { placement: 'post', aspect_ratio: '9:16' },
@@ -330,6 +337,12 @@ export default function NewPostPage() {
   const { data: accounts = [] } = useQuery({
     queryKey: ['accounts'],
     queryFn: () => accountsService.list(),
+  })
+
+  const { data: connectedAccounts = [] } = useQuery({
+    queryKey: ['connected-accounts'],
+    queryFn: () => previewService.getConnected(),
+    retry: false,
   })
 
   const allAccounts = accounts.map((a) => ({ ...a, kind: a.platform as PlatformKind }))
@@ -347,6 +360,10 @@ export default function NewPostPage() {
 
   useEffect(() => {
     setReview(null)
+    // Sync contentType with media type
+    if (mediaType === 'video') setContentType('reel')
+    else setContentType('post')
+
     setPlatformOptions((current) => ({
       ...current,
       instagram: {
@@ -498,8 +515,28 @@ export default function NewPostPage() {
     }
   }
 
+  // Derive active platform list for preview (just the platform names, not account IDs)
+  const selectedPlatformNames = [...new Set(
+    Object.entries(selectedAccounts)
+      .filter(([, v]) => v)
+      .map(([id]) => allAccounts.find((a) => a.id === id)?.kind)
+      .filter(Boolean) as string[]
+  )]
+
   return (
     <div className="page-in px-8 py-6 grid grid-cols-12 gap-6 max-w-[1440px]">
+      {/* Crop modal */}
+      {showCrop && mediaUrl && mediaType === 'image' && (
+        <CropModal
+          src={mediaUrl}
+          onClose={() => setShowCrop(false)}
+          onApply={(url) => {
+            setMediaUrl(url)
+            setMediaType('image')
+          }}
+        />
+      )}
+
       {/* Left column */}
       <div className="col-span-12 lg:col-span-8 space-y-6">
         {/* Upload zone */}
@@ -512,6 +549,22 @@ export default function NewPostPage() {
               setMediaType(url ? type : undefined)
             }}
           />
+          {/* Crop button — only for images */}
+          {mediaUrl && mediaType === 'image' && (
+            <div className="mt-3 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowCrop(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-surface border border-line text-ink hover:border-line2 hover:bg-surface2 transition"
+              >
+                <Crop size={12} />
+                Crop &amp; Resize
+              </button>
+              <span className="text-[11px] text-faint">
+                16 aspect ratios — 1:1, 4:5, 9:16, 16:9, custom…
+              </span>
+            </div>
+          )}
         </div>
 
         {false && (
@@ -678,8 +731,62 @@ export default function NewPostPage() {
         />
       </div>
 
-      {/* Right column — schedule */}
+      {/* Right column — preview + schedule */}
       <aside className="col-span-12 lg:col-span-4 space-y-5">
+
+        {/* Live preview panel */}
+        <div className="rounded-2xl bg-surface border border-line overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-line">
+            <div className="text-[11px] uppercase tracking-[0.16em] text-faint">Live Preview</div>
+            {/* Content type switcher */}
+            <div className="flex items-center bg-bg/60 border border-line rounded-lg p-0.5 text-[10px]">
+              {(['post', 'story', 'reel'] as ContentType[]).map((ct) => (
+                <button
+                  key={ct}
+                  type="button"
+                  onClick={() => setContentType(ct)}
+                  className={`px-2 py-1 rounded-md capitalize transition ${
+                    contentType === ct ? 'bg-indigo-500/20 text-ink' : 'text-mute hover:text-ink'
+                  }`}
+                >
+                  {ct}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Post aspect toggle (only for post type) */}
+          {contentType === 'post' && (
+            <div className="flex items-center gap-1.5 px-4 pt-3">
+              {(['1:1', '4:5'] as PostAspect[]).map((a) => (
+                <button
+                  key={a}
+                  type="button"
+                  onClick={() => setPostAspect(a)}
+                  className={`px-2.5 py-1 rounded-md text-xs border transition ${
+                    postAspect === a
+                      ? 'bg-indigo-500/15 border-indigo-500/40 text-ink'
+                      : 'bg-bg/40 border-line text-mute hover:border-line2 hover:text-ink'
+                  }`}
+                >
+                  {a}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="p-3">
+            <PreviewSwitcher
+              platforms={selectedPlatformNames}
+              connectedAccounts={connectedAccounts}
+              contentType={contentType}
+              postAspect={postAspect}
+              mediaUrl={mediaUrl || undefined}
+              mediaType={mediaType}
+              caption={caption}
+            />
+          </div>
+        </div>
         <div className="rounded-2xl bg-surface border border-line p-5">
           <div className="flex items-center justify-between mb-4">
             <div className="text-[11px] uppercase tracking-[0.16em] text-faint">When to post</div>
