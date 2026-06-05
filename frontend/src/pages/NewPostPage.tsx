@@ -452,8 +452,9 @@ export default function NewPostPage() {
         : ''
       setCaption(result.caption + tags)
       toast.success(mediaUrl ? 'Rasm asosida caption yaratildi' : 'Caption yaratildi')
-    } catch {
-      toast.error('Caption yaratib bo\'lmadi')
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail
+      toast.error(typeof detail === 'string' ? detail : 'Caption yaratib bo\'lmadi')
     } finally {
       setGenerating(false)
     }
