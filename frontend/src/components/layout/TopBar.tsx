@@ -4,16 +4,16 @@ import { useAuthStore, useUIStore } from '@/store'
 
 const TITLES: Record<string, { eyebrow: string; title: string }> = {
   '/':           { eyebrow: 'Home',      title: 'Good evening' },
-  '/new-post':   { eyebrow: 'Compose',   title: 'New post' },
-  '/calendar':   { eyebrow: 'Schedule',  title: 'Content calendar' },
-  '/accounts':   { eyebrow: 'Network',   title: 'Connected accounts' },
-  '/ai-chat':    { eyebrow: 'AI',        title: 'AI SMM menejer' },
-  '/analytics':  { eyebrow: 'Insights',  title: 'Analytics' },
-  '/settings':   { eyebrow: 'Workspace', title: 'Settings' },
-  '/admin':      { eyebrow: 'System',    title: 'Admin panel' },
-  '/drafts':     { eyebrow: 'Workflow',  title: 'Draft queue' },
-  '/approval':   { eyebrow: 'Workflow',  title: 'Approval queue' },
-  '/templates':  { eyebrow: 'Content',   title: 'Template library' },
+  '/dashboard/new-post':   { eyebrow: 'Compose',   title: 'New post' },
+  '/dashboard/calendar':   { eyebrow: 'Schedule',  title: 'Content calendar' },
+  '/dashboard/accounts':   { eyebrow: 'Network',   title: 'Connected accounts' },
+  '/dashboard/ai-chat':    { eyebrow: 'AI',        title: 'AI SMM menejer' },
+  '/dashboard/analytics':  { eyebrow: 'Insights',  title: 'Analytics' },
+  '/dashboard/settings':   { eyebrow: 'Workspace', title: 'Settings' },
+  '/dashboard/admin':      { eyebrow: 'System',    title: 'Admin panel' },
+  '/dashboard/drafts':     { eyebrow: 'Workflow',  title: 'Draft queue' },
+  '/dashboard/approval':   { eyebrow: 'Workflow',  title: 'Approval queue' },
+  '/dashboard/templates':  { eyebrow: 'Content',   title: 'Template library' },
 }
 
 function getGreeting() {
@@ -72,7 +72,7 @@ export default function TopBar() {
         </button>
 
         <button
-          onClick={() => navigate('/new-post')}
+          onClick={() => navigate('/dashboard/new-post')}
           className="inline-flex items-center gap-2 px-3.5 py-2 text-sm rounded-lg font-medium transition ring-focus bg-indigo-500 text-white hover:bg-indigo-400 shadow-glow-indigo"
         >
           <Plus size={14} />
