@@ -330,9 +330,9 @@ export default function LandingPage() {
           </div>
           <p className="text-xs text-faint">© 2025 ContentFlow. Barcha huquqlar himoyalangan.</p>
           <div className="flex gap-5 text-xs text-faint">
-            <a href="#" className="hover:text-mute transition">Maxfiylik</a>
-            <a href="#" className="hover:text-mute transition">Shartlar</a>
-            <a href="#" className="hover:text-mute transition">Aloqa</a>
+            <a href="/privacy" className="hover:text-mute transition">Maxfiylik</a>
+            <a href="/terms" className="hover:text-mute transition">Shartlar</a>
+            <a href="/contact" className="hover:text-mute transition">Aloqa</a>
           </div>
         </div>
       </footer>

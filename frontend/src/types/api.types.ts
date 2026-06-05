@@ -4,6 +4,8 @@ export interface User {
   full_name: string | null
   is_active: boolean
   is_admin: boolean
+  ai_credits: number
+  ai_credits_limit: number
   created_at: string
 }
 

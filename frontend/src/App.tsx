@@ -16,6 +16,9 @@ import DraftsPage from '@/pages/DraftsPage'
 import PreviewScreen from '@/components/preview/PreviewScreen'
 import ApprovalPage from '@/pages/ApprovalPage'
 import TemplatesPage from '@/pages/TemplatesPage'
+import PrivacyPage from '@/pages/PrivacyPage'
+import TermsPage from '@/pages/TermsPage'
+import ContactPage from '@/pages/ContactPage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
@@ -38,6 +41,9 @@ export default function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/terms" element={<TermsPage />} />
+        <Route path="/contact" element={<ContactPage />} />
 
         {/* Protected app routes */}
         <Route

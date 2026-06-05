@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { FileEdit, Clock, Trash2, Send, Loader2, FilePlus2, ChevronRight } from 'lucide-react'
 import { postsService } from '@/services/posts.service'
@@ -135,14 +135,22 @@ function DraftCard({ post, onDelete }: { post: Post; onDelete: (id: string) => v
 
 export default function DraftsPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set())
+  const searchQuery = searchParams.get('q')?.toLowerCase() || ''
 
   const { data: drafts = [], isLoading } = useQuery({
     queryKey: ['posts', 'drafts'],
     queryFn: () => postsService.list({ status: 'draft', limit: 50 }),
   })
 
-  const visible = drafts.filter((p) => !deletedIds.has(p.id))
+  const visible = drafts
+    .filter((p) => !deletedIds.has(p.id))
+    .filter((p) =>
+      searchQuery
+        ? (p.caption || '').toLowerCase().includes(searchQuery)
+        : true
+    )
 
   return (
     <div className="page-in px-8 py-6 max-w-4xl">
@@ -152,13 +160,19 @@ export default function DraftsPage() {
           <h1 className="font-display text-2xl text-ink">Draft Queue</h1>
         </div>
         <button
-          onClick={() => navigate('/new-post')}
+          onClick={() => navigate('/dashboard/new-post')}
           className="inline-flex items-center gap-2 px-3.5 py-2 text-sm rounded-lg font-medium bg-indigo-500 text-white hover:bg-indigo-400 shadow-glow-indigo transition"
         >
           <FilePlus2 size={14} />
           New Draft
         </button>
       </div>
+      {searchQuery && (
+        <div className="mb-4 text-sm text-mute">
+          Qidiruv: <span className="text-ink font-medium">"{searchParams.get('q')}"</span>
+          {' · '}{visible.length} natija
+        </div>
+      )}
 
       {isLoading ? (
         <div className="grid gap-4">
@@ -174,7 +188,7 @@ export default function DraftsPage() {
           <div className="font-display text-lg text-ink mb-1">Draft yo'q</div>
           <div className="text-sm text-mute mb-4">Yangi post yarating va draft sifatida saqlang</div>
           <button
-            onClick={() => navigate('/new-post')}
+            onClick={() => navigate('/dashboard/new-post')}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-500 text-white text-sm font-medium hover:bg-indigo-400 transition"
           >
             <FilePlus2 size={14} />

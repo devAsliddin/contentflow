@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { Search, Bell, Plus, Sun, Moon } from 'lucide-react'
 import { useAuthStore, useUIStore } from '@/store'
@@ -30,12 +31,38 @@ export default function TopBar() {
   const user = useAuthStore((s) => s.user)
   const theme = useUIStore((s) => s.theme)
   const toggleTheme = useUIStore((s) => s.toggleTheme)
+  const searchRef = useRef<HTMLInputElement>(null)
+  const [searchQuery, setSearchQuery] = useState('')
 
   const meta = TITLES[location.pathname] || TITLES['/dashboard']
   const isDashboard = location.pathname === '/dashboard'
   const title = isDashboard
     ? `${getGreeting()}, ${user?.full_name?.split(' ')[0] || 'there'}`
     : meta.title
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        searchRef.current?.focus()
+        searchRef.current?.select()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
+  function handleSearchSubmit(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter' && searchQuery.trim()) {
+      navigate(`/dashboard/drafts?q=${encodeURIComponent(searchQuery.trim())}`)
+      setSearchQuery('')
+      searchRef.current?.blur()
+    }
+    if (e.key === 'Escape') {
+      setSearchQuery('')
+      searchRef.current?.blur()
+    }
+  }
 
   return (
     <header className="sticky top-0 z-30 bg-bg/70 backdrop-blur-xl border-b border-line">
@@ -48,10 +75,14 @@ export default function TopBar() {
           </h1>
         </div>
 
-        <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface border border-line text-mute w-72">
+        <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface border border-line text-mute w-72 focus-within:border-indigo-500/50 transition">
           <Search size={14} />
           <input
+            ref={searchRef}
             type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={handleSearchSubmit}
             placeholder="Search posts, drafts, captions…"
             className="bg-transparent flex-1 text-sm focus:outline-none placeholder:text-faint text-ink"
           />

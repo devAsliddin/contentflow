@@ -293,12 +293,15 @@ export default function Sidebar({ collapsed, setCollapsed, onMobileClose }: Prop
               <span className="text-[11px] uppercase tracking-[0.16em] text-mute">AI credits</span>
             </div>
             <div className="font-display text-2xl text-ink tnum">
-              1,284<span className="text-faint text-base"> / 2,000</span>
+              {(user?.ai_credits ?? 2000).toLocaleString()}<span className="text-faint text-base"> / {(user?.ai_credits_limit ?? 2000).toLocaleString()}</span>
             </div>
             <div className="mt-2 h-1.5 rounded-full bg-line2/40 overflow-hidden">
               <div
                 className="h-full rounded-full"
-                style={{ width: '64%', background: 'linear-gradient(90deg, #6C63FF, #00F5A0)' }}
+                style={{
+                  width: `${Math.round(((user?.ai_credits ?? 2000) / (user?.ai_credits_limit ?? 2000)) * 100)}%`,
+                  background: 'linear-gradient(90deg, #6C63FF, #00F5A0)',
+                }}
               />
             </div>
             <button className="mt-3 w-full text-[12px] font-medium text-ink py-1.5 rounded-md bg-surface2 border border-line hover:border-line2 transition">

@@ -4,6 +4,11 @@ from datetime import datetime
 from pydantic import BaseModel, EmailStr, field_validator, model_validator
 
 
+def _strip_html(value: str) -> str:
+    """Remove HTML tags from user-supplied text to prevent stored XSS."""
+    return re.sub(r'<[^>]+>', '', value)
+
+
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
@@ -31,7 +36,7 @@ class UserCreate(BaseModel):
     @classmethod
     def validate_full_name(cls, v: str | None) -> str | None:
         if v is not None:
-            v = v.strip()
+            v = _strip_html(v).strip()
             if len(v) < 2:
                 raise ValueError("Full name must be at least 2 characters")
             if len(v) > 100:
@@ -55,6 +60,8 @@ class UserOut(BaseModel):
     full_name: str | None
     is_active: bool
     is_admin: bool = False
+    ai_credits: int = 2000
+    ai_credits_limit: int = 2000
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -62,6 +69,13 @@ class UserOut(BaseModel):
 
 class UserUpdate(BaseModel):
     full_name: str | None = None
+
+    @field_validator("full_name")
+    @classmethod
+    def sanitize_full_name(cls, v: str | None) -> str | None:
+        if v is not None:
+            v = _strip_html(v).strip()
+        return v or None
 
 
 class TokenData(BaseModel):

@@ -1,5 +1,8 @@
 import os
+import logging
 from fastapi import APIRouter, Depends, HTTPException
+
+logger = logging.getLogger(__name__)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -118,4 +121,5 @@ async def suggest_ideas(
         ideas = await service.suggest_ideas(recent_posts)
         return ideas
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ideas generation failed: {str(e)}")
+        logger.warning("Ideas generation failed (AI service may be offline): %s", e)
+        return {"ideas": []}
