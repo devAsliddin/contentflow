@@ -3,8 +3,9 @@ import { Search, Bell, Plus, Sun, Moon } from 'lucide-react'
 import { useAuthStore, useUIStore } from '@/store'
 
 const TITLES: Record<string, { eyebrow: string; title: string }> = {
-  '/':           { eyebrow: 'Home',      title: 'Good evening' },
+  '/dashboard':            { eyebrow: 'Home',      title: 'Good evening' },
   '/dashboard/new-post':   { eyebrow: 'Compose',   title: 'New post' },
+  '/dashboard/preview':    { eyebrow: 'Preview',   title: 'Post preview' },
   '/dashboard/calendar':   { eyebrow: 'Schedule',  title: 'Content calendar' },
   '/dashboard/accounts':   { eyebrow: 'Network',   title: 'Connected accounts' },
   '/dashboard/ai-chat':    { eyebrow: 'AI',        title: 'AI SMM menejer' },
@@ -30,8 +31,8 @@ export default function TopBar() {
   const theme = useUIStore((s) => s.theme)
   const toggleTheme = useUIStore((s) => s.toggleTheme)
 
-  const meta = TITLES[location.pathname] || TITLES['/']
-  const isDashboard = location.pathname === '/'
+  const meta = TITLES[location.pathname] || TITLES['/dashboard']
+  const isDashboard = location.pathname === '/dashboard'
   const title = isDashboard
     ? `${getGreeting()}, ${user?.full_name?.split(' ')[0] || 'there'}`
     : meta.title
