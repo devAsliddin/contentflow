@@ -65,3 +65,10 @@ htmlcov/
 *.crt
 secrets/
 .gstack/
+
+# Runtime logs, pids, build artifacts
+.logs/
+.run.pids
+*.tsbuildinfo
+frontend/test-results/
+frontend/playwright-report/

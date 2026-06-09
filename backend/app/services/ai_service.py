@@ -7,6 +7,7 @@ logger = logging.getLogger(__name__)
 
 from app.config import get_settings as _get_settings
 from app.services.ollama_client import call_ollama_chat
+from app.services.xai_client import call_xai_chat
 
 # Model constants per spec
 SONNET_MODEL = "claude-sonnet-4-20250514"
@@ -69,6 +70,34 @@ class _AnthropicClientWrapper:
         self.messages = _AnthropicMessages(client)
 
 
+# ── xAI (Grok) wrapper — primary provider ─────────────────────────────────────
+
+class _XAIMessages:
+    def __init__(self, model: str):
+        self._model = model
+
+    async def create(
+        self,
+        model: str | None = None,
+        max_tokens: int = 4096,
+        messages: list[dict] | None = None,
+        system: str | None = None,
+        **kwargs,
+    ) -> _AnthropicResponse:
+        all_messages: list[dict] = []
+        if system:
+            all_messages.append({"role": "system", "content": system})
+        all_messages.extend(messages or [])
+
+        text = await call_xai_chat(all_messages, model or self._model, timeout=120)
+        return _AnthropicResponse(text)
+
+
+class _XAIClientWrapper:
+    def __init__(self, model: str):
+        self.messages = _XAIMessages(model)
+
+
 # ── Ollama wrapper (unchanged for fallback) ───────────────────────────────────
 
 class _OllamaMessages:
@@ -105,11 +134,16 @@ class _OllamaClientWrapper:
 
 
 def _build_client() -> tuple[Any, str, str]:
-    """Return (client, sonnet_model, haiku_model).
+    """Return (client, primary_model, secondary_model).
 
-    Uses Anthropic if ANTHROPIC_API_KEY is set, else falls back to Ollama.
+    Priority: xAI/Grok (if XAI_API_KEY set) → Anthropic (if key) → local Ollama.
     """
     settings = _get_settings()
+    if settings.xai_api_key:
+        wrapper = _XAIClientWrapper(settings.xai_model)
+        # Both "sonnet" and "haiku" slots map to the same Grok text model.
+        return wrapper, settings.xai_model, settings.xai_model
+
     if settings.anthropic_api_key:
         try:
             import anthropic  # type: ignore
@@ -121,6 +155,13 @@ def _build_client() -> tuple[Any, str, str]:
                 "anthropic package not installed — falling back to Ollama. "
                 "Run: pip install anthropic"
             )
+
+    # OpenRouter free model as primary fallback. The model name contains a "/",
+    # so call_ollama_chat routes it straight to OpenRouter (skips local Ollama).
+    if settings.openrouter_api_key:
+        model = settings.openrouter_model
+        wrapper = _OllamaClientWrapper(model)
+        return wrapper, model, model
 
     wrapper = _OllamaClientWrapper(OLLAMA_DEFAULT)
     return wrapper, OLLAMA_DEFAULT, OLLAMA_DEFAULT
@@ -174,7 +215,9 @@ Return JSON exactly matching this structure:
       "day": 0,
       "platform": "instagram",
       "idea": "Short post idea max 7 words",
-      "scheduled_time": "09:00"
+      "scheduled_time": "09:00",
+      "content_type": "video",
+      "video_brief": "What video to shoot/prepare for this day"
     }}
   ]
 }}
@@ -183,7 +226,14 @@ day field: 0=Monday, 1=Tuesday, ..., 6=Sunday.
 Distribute {frequency} posts per platform across the 7 days.
 Use the optimal times listed above for each platform.
 Only include platforms from this list: {', '.join(platforms)}.
-Each idea must be max 7 words."""
+Each idea must be max 7 words.
+
+content_type rules:
+- "video" for tiktok and youtube always; mix of "image"/"video" for instagram; "image" otherwise.
+- When content_type is "video", video_brief MUST describe exactly what video to
+  prepare for that specific day: the concept, shots, length (e.g. 15-30s reel),
+  and a hook. Make each day's video distinct. Write video_brief in {language}.
+- When content_type is "image", set video_brief to an empty string."""
 
         response = await self.client.messages.create(
             model=self.sonnet,
@@ -309,8 +359,12 @@ Return JSON:
         tone: str,
         language: str = "en",
     ) -> dict:
-        """Generate a caption by visually analyzing the uploaded image."""
+        """Generate a caption by visually analyzing the uploaded image.
+
+        Uses Grok vision when XAI_API_KEY is set, else falls back to Ollama vision.
+        """
         from app.services.ollama_client import call_ollama_vision
+        from app.services.xai_client import call_xai_vision
 
         platform_limits = {
             "instagram": 2200, "tiktok": 2200, "telegram": 4096,
@@ -327,7 +381,11 @@ Return JSON:
             f'{{"caption": "the caption text", "hashtags": ["tag1", "tag2", "tag3"], "character_count": 0}}'
         )
 
-        raw_text = await call_ollama_vision(image_path, prompt, model="gemma3:4b")
+        settings = _get_settings()
+        if settings.xai_api_key:
+            raw_text = await call_xai_vision(image_path, prompt)
+        else:
+            raw_text = await call_ollama_vision(image_path, prompt, model="gemma3:4b")
 
         try:
             result = _parse_json(raw_text)

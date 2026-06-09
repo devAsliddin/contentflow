@@ -206,12 +206,27 @@ function SocialCard({
 function InstagramConnectForm({ onSuccess }: { onSuccess: () => void }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [verificationCode, setVerificationCode] = useState('')
+  const [needs2fa, setNeeds2fa] = useState(false)
   const [showPass, setShowPass] = useState(false)
 
   const mutation = useMutation({
-    mutationFn: () => accountsService.connectInstagram({ username, password }),
+    mutationFn: () => accountsService.connectInstagram({
+      username,
+      password,
+      verification_code: needs2fa ? (verificationCode.trim() || undefined) : undefined,
+    }),
     onSuccess: () => { toast.success('Instagram account connected'); onSuccess() },
-    onError: (err: any) => toast.error(err?.response?.data?.detail || 'Login failed'),
+    onError: (err: any) => {
+      const detail = err?.response?.data?.detail
+      // 2FA only asked when Instagram actually requires it.
+      if (err?.response?.status === 409 && detail?.code === 'two_factor_required') {
+        setNeeds2fa(true)
+        toast.info(detail.message || 'Enter your 2FA code')
+        return
+      }
+      toast.error((typeof detail === 'string' ? detail : detail?.message) || 'Login failed')
+    },
   })
 
   return (
@@ -255,13 +270,30 @@ function InstagramConnectForm({ onSuccess }: { onSuccess: () => void }) {
           </button>
         </div>
       </div>
+      {needs2fa && (
+        <div>
+          <label className="text-[10px] uppercase tracking-[0.14em] text-faint">
+            2FA code <span className="text-faint/60 normal-case tracking-normal">— from your authenticator app or SMS</span>
+          </label>
+          <input
+            value={verificationCode}
+            onChange={(e) => setVerificationCode(e.target.value)}
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            autoFocus
+            required
+            placeholder="6-digit code"
+            className="mt-1.5 w-full px-3 py-2.5 bg-surface border border-indigo-500/40 rounded-lg text-sm text-ink placeholder:text-faint focus:outline-none focus:border-indigo-500/60 transition tracking-widest"
+          />
+        </div>
+      )}
       <button
         type="submit"
         disabled={mutation.isPending}
         className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-indigo-500 text-white hover:bg-indigo-400 transition disabled:opacity-50"
       >
         {mutation.isPending ? <RadarIcon size={14} className="animate-spin" /> : <KeyRound size={14} />}
-        {mutation.isPending ? 'Logging in…' : 'Connect Instagram'}
+        {mutation.isPending ? 'Logging in…' : needs2fa ? 'Submit 2FA code' : 'Connect Instagram'}
       </button>
     </form>
   )

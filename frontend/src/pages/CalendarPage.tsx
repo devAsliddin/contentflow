@@ -167,7 +167,7 @@ function DayDrawer({ day, posts, onClose }: { day: Date; posts: Post[]; onClose:
 
         <div className="p-5 border-t border-line">
           <button
-            onClick={() => navigate('/new-post')}
+            onClick={() => navigate('/dashboard/new-post')}
             className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-indigo-500 text-white font-medium shadow-glow-indigo hover:bg-indigo-400 transition text-sm"
           >
             <Plus size={14} />
@@ -493,6 +493,12 @@ function AiPlanModal({ weekStart, onClose }: AiPlanModalProps) {
                               {format(postDate, 'EEE d MMM')} · {post.scheduled_time}
                             </div>
                             <div className="text-[12px] text-faint mt-0.5 italic">{post.idea}</div>
+                            {post.content_type === 'video' && post.video_brief && (
+                              <div className="mt-1.5 flex items-start gap-1.5 rounded-lg bg-fuchsia-500/10 border border-fuchsia-500/25 px-2 py-1.5">
+                                <span className="text-[10px] uppercase tracking-wide text-fuchsia-300 font-semibold shrink-0 mt-px">🎬 Video</span>
+                                <span className="text-[11px] text-fuchsia-200/90 leading-snug">{post.video_brief}</span>
+                              </div>
+                            )}
                           </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
@@ -686,9 +692,9 @@ export default function CalendarPage() {
   const aiWeekStart = getMonday(currentMonth)
 
   return (
-    <div className="page-in px-8 py-6">
+    <div className="page-in px-4 md:px-8 py-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between gap-3 flex-wrap gap-y-3 mb-6">
         <div className="flex items-center gap-4">
           <div className="flex items-center bg-surface border border-line rounded-lg overflow-hidden">
             <button
@@ -736,7 +742,7 @@ export default function CalendarPage() {
               (k) => (
                 <div key={k} className="flex items-center gap-1.5">
                   <PlatformChip kind={k} size={14} />
-                  <span className="hidden xl:inline">{PLATFORM_META[k].label}</span>
+                  <span className="hidden 2xl:inline">{PLATFORM_META[k].label}</span>
                 </div>
               ),
             )}
@@ -754,7 +760,7 @@ export default function CalendarPage() {
             AI Plan
           </button>
           <button
-            onClick={() => navigate('/new-post')}
+            onClick={() => navigate('/dashboard/new-post')}
             className="inline-flex items-center gap-2 px-3.5 py-2 text-sm rounded-lg font-medium bg-indigo-500 text-white hover:bg-indigo-400 shadow-glow-indigo transition"
           >
             <Plus size={14} />

@@ -28,6 +28,13 @@ class Settings(BaseSettings):
     # Ollama
     ollama_url: str = "http://localhost:11434"
 
+    # xAI (Grok) — primary AI provider when xai_api_key is set.
+    # OpenAI-compatible API; replaces local Ollama. Get a key at https://console.x.ai
+    xai_api_key: str = ""
+    xai_base_url: str = "https://api.x.ai/v1"
+    xai_model: str = "grok-3-mini"
+    xai_vision_model: str = "grok-2-vision-1212"
+
     # OpenRouter / OpenAI-compatible fallback
     openrouter_api_key: str = ""
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
@@ -39,6 +46,15 @@ class Settings(BaseSettings):
     # Instagram
     instagram_app_id: str = ""
     instagram_app_secret: str = ""
+
+    # V4 — Instagram auto-reply (DM + comment). Uses the Meta app credentials.
+    # meta_app_id/secret fall back to instagram_app_id/secret if left empty.
+    meta_app_id: str = ""
+    meta_app_secret: str = ""
+    instagram_oauth_redirect_uri: str = ""
+    instagram_webhook_verify_token: str = ""
+    # Meta bumps the Graph version often — keep it configurable, never hardcoded.
+    instagram_graph_version: str = "v23.0"
 
     # TikTok
     tiktok_client_key: str = ""
@@ -72,6 +88,14 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.environment == "production"
+
+    @property
+    def meta_app_id_resolved(self) -> str:
+        return self.meta_app_id or self.instagram_app_id
+
+    @property
+    def meta_app_secret_resolved(self) -> str:
+        return self.meta_app_secret or self.instagram_app_secret
 
     @property
     def cors_origins(self) -> list[str]:

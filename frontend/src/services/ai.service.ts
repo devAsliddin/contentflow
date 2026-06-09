@@ -71,12 +71,21 @@ export const aiService = {
     return data
   },
 
-  async agentChat(messages: { role: string; content: string }[], model?: string): Promise<AgentChatResponse> {
-    const { data } = await apiV2.post('/ai/agent-chat', { messages, model: model || 'qwen2.5:0.5b' })
+  async agentChat(
+    messages: { role: string; content: string }[],
+    model?: string,
+    media?: { media_url?: string; media_type?: string },
+  ): Promise<AgentChatResponse> {
+    const { data } = await apiV2.post('/ai/agent-chat', {
+      messages,
+      model: model || 'qwen2.5:0.5b',
+      media_url: media?.media_url,
+      media_type: media?.media_type,
+    })
     return data
   },
 
-  async listModels(): Promise<{ models: string[]; default: string; status: string }> {
+  async listModels(): Promise<{ models: string[]; default: string; status: string; provider?: string }> {
     const { data } = await apiV2.get('/ai/models')
     return data
   },

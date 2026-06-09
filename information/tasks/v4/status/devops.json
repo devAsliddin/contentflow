@@ -1,0 +1,11 @@
+{
+  "agent": "devops",
+  "version": "v4",
+  "tasks": [
+    {
+      "id": "DO-V4-008",
+      "status": "done",
+      "notes": "Nginx dedicated rate-limit-free location for /api/webhooks/instagram (raw body preserved). Celery include + daily token-refresh beat schedule. .env.example updated (META_APP_ID/SECRET, redirect URI, verify token, graph version). Remaining: one-time Meta App setup + App Review (config, not code)."
+    }
+  ]
+}

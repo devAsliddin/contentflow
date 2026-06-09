@@ -3,7 +3,7 @@ import {
   LayoutDashboard, PlusCircle, CalendarDays, UsersRound,
   Sparkles, LineChart, Settings2, PanelLeftClose, PanelLeftOpen,
   ChevronUp, ShieldCheck, LogOut, FileEdit, ClipboardCheck, Layers,
-  ChevronDown, X, MessageSquare, MonitorPlay,
+  ChevronDown, X, MessageSquare, MonitorPlay, Bot,
 } from 'lucide-react'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
@@ -25,6 +25,7 @@ const NAV_WORKFLOW = [
   { to: '/dashboard/drafts',    label: 'Drafts',    icon: FileEdit },
   { to: '/dashboard/approval',  label: 'Approval',  icon: ClipboardCheck },
   { to: '/dashboard/templates', label: 'Templates', icon: Layers },
+  { to: '/dashboard/autoreply', label: 'Auto-reply', icon: Bot },
 ]
 
 const NAV_BOTTOM = [

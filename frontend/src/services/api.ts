@@ -37,10 +37,18 @@ function processQueue(error: unknown, token: string | null = null) {
   failedQueue = []
 }
 
+// Auth endpoints must surface their own 401s (e.g. wrong email/password) to the
+// caller instead of triggering a token refresh + redirect to /login.
+const AUTH_ENDPOINTS = ['/auth/login', '/auth/register', '/auth/refresh']
+
 async function handle401(error: any, instance: typeof api) {
   const originalRequest = error.config
 
-  if (error.response?.status === 401 && !originalRequest._retry) {
+  const isAuthEndpoint = AUTH_ENDPOINTS.some((path) =>
+    (originalRequest?.url || '').includes(path)
+  )
+
+  if (error.response?.status === 401 && !isAuthEndpoint && !originalRequest._retry) {
     if (isRefreshing) {
       return new Promise((resolve, reject) => {
         failedQueue.push({ resolve, reject })

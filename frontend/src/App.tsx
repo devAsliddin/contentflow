@@ -16,6 +16,7 @@ import DraftsPage from '@/pages/DraftsPage'
 import PreviewScreen from '@/components/preview/PreviewScreen'
 import ApprovalPage from '@/pages/ApprovalPage'
 import TemplatesPage from '@/pages/TemplatesPage'
+import AutoReplyRulesPage from '@/components/autoreply/AutoReplyRulesPage'
 import PrivacyPage from '@/pages/PrivacyPage'
 import TermsPage from '@/pages/TermsPage'
 import ContactPage from '@/pages/ContactPage'
@@ -66,6 +67,7 @@ export default function App() {
           <Route path="drafts" element={<DraftsPage />} />
           <Route path="approval" element={<ApprovalPage />} />
           <Route path="templates" element={<TemplatesPage />} />
+          <Route path="autoreply" element={<AutoReplyRulesPage />} />
           <Route
             path="admin"
             element={

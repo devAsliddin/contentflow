@@ -8,7 +8,10 @@ celery_app = Celery(
     "contentflow",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["app.tasks.post_tasks", "app.tasks.ai_tasks", "app.tasks.beat_tasks"],
+    include=[
+        "app.tasks.post_tasks", "app.tasks.ai_tasks", "app.tasks.beat_tasks",
+        "app.tasks.instagram_autoreply",
+    ],
 )
 
 celery_app.conf.update(
@@ -37,6 +40,11 @@ celery_app.conf.update(
         "weekly-analytics-summary": {
             "task": "contentflow.weekly_analytics_summary",
             "schedule": crontab(hour=9, minute=0, day_of_week="monday"),
+        },
+        # V4: refresh Instagram long-lived tokens daily at 03:00 UTC
+        "refresh-instagram-tokens": {
+            "task": "contentflow.refresh_instagram_tokens",
+            "schedule": crontab(hour=3, minute=0),
         },
     },
 )

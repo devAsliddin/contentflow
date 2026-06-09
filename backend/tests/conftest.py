@@ -67,12 +67,14 @@ async def test_user(db: AsyncSession) -> User:
 
 @pytest_asyncio.fixture
 async def test_account(db: AsyncSession, test_user: User) -> Account:
+    from app.services.encryption import encrypt_credentials
     acc = Account(
         id=uuid.uuid4(),
         user_id=test_user.id,
         platform="telegram",
         account_name="test_channel",
-        credentials='{"bot_token": "fake_token", "channel_id": "@fake_channel"}',
+        # Stored encrypted, exactly like production (so decrypt-based checks pass).
+        credentials=encrypt_credentials({"bot_token": "fake_token", "channel_id": "@fake_channel"}),
         is_active=True,
     )
     db.add(acc)

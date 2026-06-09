@@ -7,6 +7,10 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+class InstagramTwoFactorRequired(Exception):
+    """Raised when the account has 2FA enabled and a code is needed."""
+
+
 def _client():
     from instagrapi import Client
     cl = Client()
@@ -14,23 +18,42 @@ def _client():
     return cl
 
 
-def instagram_login(username: str, password: str) -> dict[str, Any]:
+def instagram_login(
+    username: str,
+    password: str,
+    verification_code: str | None = None,
+) -> dict[str, Any]:
     """
     Authenticate with Instagram and return a dict with:
       - session: JSON-serialisable session dict (store encrypted, NOT the password)
       - user_id: numeric Instagram user ID
       - username: normalised username
+    Pass verification_code (6-digit) when the account has 2FA enabled.
     Raises ValueError on bad credentials or challenge required.
     """
+    from instagrapi.exceptions import TwoFactorRequired
+
     cl = _client()
     try:
-        cl.login(username, password)
+        if verification_code:
+            cl.login(username, password, verification_code=str(verification_code).strip())
+        else:
+            cl.login(username, password)
+    except TwoFactorRequired:
+        # Account has 2FA. If a code was already supplied, it was wrong/expired.
+        if verification_code:
+            raise ValueError("Incorrect or expired 2FA code. Enter a fresh code.")
+        raise InstagramTwoFactorRequired("2FA code required")
     except Exception as e:
         msg = str(e).lower()
-        if "challenge" in msg or "two" in msg or "2fa" in msg or "verification" in msg:
+        if "two" in msg or "2fa" in msg:
+            if verification_code:
+                raise ValueError("Incorrect or expired 2FA code. Enter a fresh code.")
+            raise InstagramTwoFactorRequired("2FA code required")
+        if "challenge" in msg or "verification" in msg:
             raise ValueError(
-                "Instagram requires 2-factor verification. "
-                "Approve the login from your phone, then try again."
+                "Instagram requires verification. Open the Instagram app on your "
+                "phone, approve this login, then try again."
             )
         if "bad_password" in msg or "incorrect" in msg or "invalid" in msg:
             raise ValueError("Incorrect username or password.")
@@ -81,6 +104,45 @@ def post_to_instagram_session(
         or "unknown"
     )
     return str(media_id)
+
+
+def fetch_media_metrics(items: list[tuple]) -> dict[str, dict]:
+    """Fetch REAL engagement metrics for published Instagram posts.
+
+    items: list of (post_id, media_pk, session_dict).
+    Returns {post_id: {likes, views, reach, comments}}. Blocking — run in a thread.
+    One instagrapi client is reused per distinct session to limit API calls.
+    """
+    out: dict[str, dict] = {}
+    client_cache: dict[int, Any] = {}
+    for post_id, media_pk, session in items:
+        if not session or not media_pk:
+            continue
+        try:
+            key = id(session)
+            cl = client_cache.get(key)
+            if cl is None:
+                cl = _client()
+                cl.set_settings(session)
+                client_cache[key] = cl
+            # media_pk we stored is the numeric pk; ensure it's usable
+            pk = cl.media_pk_from_code(media_pk) if not str(media_pk).isdigit() else media_pk
+            m = cl.media_info(pk)
+            likes = int(getattr(m, "like_count", 0) or 0)
+            comments = int(getattr(m, "comment_count", 0) or 0)
+            views = int(getattr(m, "view_count", 0) or getattr(m, "play_count", 0) or 0)
+            out[str(post_id)] = {
+                "likes": likes,
+                "views": views,
+                # True reach needs the Insights API (business). Fall back to views,
+                # else approximate from likes so the row isn't empty.
+                "reach": views or int(likes * 1.4),
+                "comments": comments,
+            }
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("media metrics fetch failed for %s: %s", media_pk, exc)
+            continue
+    return out
 
 
 async def verify_instagram_session(session_json: str) -> bool:

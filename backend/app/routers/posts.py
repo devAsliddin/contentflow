@@ -139,8 +139,8 @@ async def _review_post_payload(
             elif not _media_file_exists(data.media_url):
                 target_errors.append("TikTok video fayli serverda topilmadi. Qayta upload qiling.")
             elif data.media_url.startswith("/media/") and "localhost" in settings.backend_url:
-                warnings.append("TikTok publish uchun BACKEND_URL public HTTPS domen bo'lishi kerak.")
-                notes.append("TikTok uchun public video URL kerak.")
+                warnings.append("TikTok requires a public HTTPS domain configured for publishing.")
+                notes.append("TikTok requires a public video URL.")
             if placement != "post":
                 target_errors.append("TikTok uchun hozircha faqat Post qo'llanadi.")
             if aspect_ratio not in ("9:16", "16:9"):

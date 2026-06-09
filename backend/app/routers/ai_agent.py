@@ -34,6 +34,9 @@ class AgentMessage(BaseModel):
 class AgentChatRequest(BaseModel):
     messages: list[AgentMessage] = Field(..., min_length=1)
     model: str = Field(default=DEFAULT_MODEL, max_length=100)
+    # Optional media the user attached in chat — used as the post's image/video.
+    media_url: str | None = None
+    media_type: str | None = None  # "image" | "video"
 
 
 class AgentAction(BaseModel):
@@ -167,10 +170,15 @@ async def agent_chat(
     acc_result = await db.execute(
         select(Account).where(Account.user_id == current_user.id, Account.is_active == True)
     )
+    account_rows = list(acc_result.scalars().all())
     accounts = [
         {"platform": a.platform, "account_name": a.account_name}
-        for a in acc_result.scalars().all()
+        for a in account_rows
     ]
+    # First active account id per platform — used to build publishable targets.
+    platform_account: dict[str, str] = {}
+    for a in account_rows:
+        platform_account.setdefault(a.platform, str(a.id))
 
     # Load upcoming posts (scheduled or draft)
     now = datetime.now(timezone.utc)
@@ -186,6 +194,15 @@ async def agent_chat(
     upcoming = list(post_result.scalars().all())
 
     system_prompt = _build_system_prompt(accounts, upcoming, now)
+
+    # If the user attached a media file in chat, tell the agent it's available so
+    # it creates a post using it (the file is auto-attached server-side).
+    if data.media_url:
+        system_prompt += (
+            f"\n\nThe user has attached a {data.media_type or 'media'} file that is "
+            f"ready to be posted. When you create_post, this file will be attached "
+            f"automatically — schedule the post for the requested day/time."
+        )
 
     messages = [m.model_dump() for m in data.messages]
     messages = [m for m in messages if m.get("role") != "system"]
@@ -204,7 +221,18 @@ async def agent_chat(
         if action_type == "create_post":
             try:
                 caption = parsed.get("caption", "")
-                platforms = parsed.get("platforms", [a["platform"] for a in accounts])
+                raw_platforms = parsed.get("platforms", [a["platform"] for a in accounts])
+                # Convert platform names to publishable "platform:account_id" targets
+                # so the scheduled post can actually be published with the media.
+                platforms = []
+                for p in raw_platforms:
+                    p = str(p)
+                    if ":" in p:
+                        platforms.append(p)
+                    elif p in platform_account:
+                        platforms.append(f"{p}:{platform_account[p]}")
+                    else:
+                        platforms.append(p)
                 scheduled_at_str = parsed.get("scheduled_at")
 
                 scheduled_at = None
@@ -222,6 +250,9 @@ async def agent_chat(
                     platforms=platforms,
                     scheduled_at=scheduled_at,
                     status="scheduled" if scheduled_at else "draft",
+                    # Attach the media the user uploaded in chat, if any.
+                    media_url=data.media_url,
+                    media_type=data.media_type,
                 )
                 db.add(post)
                 await db.flush()

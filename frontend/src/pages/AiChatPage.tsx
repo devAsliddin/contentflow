@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
-import { Send, Bot, User, Sparkles, ChevronDown, Loader2, AlertCircle, RefreshCw, Zap, CheckCircle, Calendar, ExternalLink, LayoutGrid } from 'lucide-react'
+import { Send, Bot, User, Sparkles, ChevronDown, Loader2, AlertCircle, RefreshCw, Zap, CheckCircle, Calendar, ExternalLink, LayoutGrid, Paperclip, X, Image as ImageIcon, Film } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useNavigate } from 'react-router-dom'
 import { aiService } from '@/services/ai.service'
+import { api } from '@/services/api'
 import type { AgentAction, PlannedPost } from '@/services/ai.service'
 
 interface Message {
@@ -189,17 +190,56 @@ function MessageBubble({ msg, onViewCalendar }: { msg: Message; onViewCalendar: 
   )
 }
 
+const CHAT_HISTORY_KEY = 'cf_ai_chat_history'
+
 export default function AiChatPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const [messages, setMessages] = useState<Message[]>([])
+  // Persist chat history across navigation and reloads.
+  const [messages, setMessages] = useState<Message[]>(() => {
+    try {
+      const saved = localStorage.getItem(CHAT_HISTORY_KEY)
+      return saved ? (JSON.parse(saved) as Message[]) : []
+    } catch {
+      return []
+    }
+  })
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [selectedModel, setSelectedModel] = useState('qwen2.5:0.5b')
   const [modelDropOpen, setModelDropOpen] = useState(false)
   const [agentMode, setAgentMode] = useState(true)
+  const [attachedMedia, setAttachedMedia] = useState<{ url: string; type: string; name: string } | null>(null)
+  const [uploadingMedia, setUploadingMedia] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (e.target) e.target.value = ''  // allow re-selecting the same file
+    if (!file) return
+    const isImage = file.type.startsWith('image/')
+    const isVideo = file.type.startsWith('video/')
+    if (!isImage && !isVideo) {
+      toast.error('Faqat rasm yoki video yuklash mumkin')
+      return
+    }
+    setUploadingMedia(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const { data } = await api.post('/upload/media', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      setAttachedMedia({ url: data.url, type: data.media_type, name: file.name })
+      toast.success('Fayl biriktirildi — endi qaysi kunga rejalashtirishni yozing')
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail || 'Yuklashda xato')
+    } finally {
+      setUploadingMedia(false)
+    }
+  }
 
   const { data: modelsData, isError: modelsError } = useQuery({
     queryKey: ['ollama-models'],
@@ -209,34 +249,48 @@ export default function AiChatPage() {
   })
 
   useEffect(() => {
-    if (modelsData?.models) {
-      // Prefer local Ollama models (no '/' in name); fall back to default only if local
-      const localModels = modelsData.models.filter((m: string) => !m.includes('/'))
-      const best = localModels[0] ?? (modelsData.default?.includes('/') ? 'qwen2.5:0.5b' : modelsData.default)
-      if (best) setSelectedModel(best)
-    }
+    // Use whatever model the backend actually serves (OpenRouter, Grok, or Ollama).
+    if (modelsData?.default) setSelectedModel(modelsData.default)
   }, [modelsData])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
 
+  // Save chat history whenever it changes (and clear storage when emptied).
+  useEffect(() => {
+    try {
+      if (messages.length) localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(messages))
+      else localStorage.removeItem(CHAT_HISTORY_KEY)
+    } catch {
+      /* storage unavailable — ignore */
+    }
+  }, [messages])
+
   const ollamaOnline = modelsData?.status === 'ok'
 
   async function sendMessage(text?: string) {
     const content = (text ?? input).trim()
-    if (!content || loading) return
+    // Allow sending with just an attached file (e.g. "schedule for Monday 18:00").
+    if ((!content && !attachedMedia) || loading) return
 
-    const userMsg: Message = { id: crypto.randomUUID(), role: 'user', content }
+    const mediaForSend = attachedMedia
+    const displayContent = content || (mediaForSend ? `📎 ${mediaForSend.name}` : '')
+    const userMsg: Message = { id: crypto.randomUUID(), role: 'user', content: displayContent }
     setMessages((prev) => [...prev, userMsg])
     setInput('')
+    setAttachedMedia(null)
     setLoading(true)
 
     try {
       const history = [...messages, userMsg].map((m) => ({ role: m.role, content: m.content }))
 
       if (agentMode) {
-        const result = await aiService.agentChat(history, selectedModel)
+        const result = await aiService.agentChat(
+          history,
+          selectedModel,
+          mediaForSend ? { media_url: mediaForSend.url, media_type: mediaForSend.type } : undefined,
+        )
         const assistantMsg: Message = {
           id: crypto.randomUUID(),
           role: 'assistant',
@@ -286,8 +340,15 @@ export default function AiChatPage() {
     }
   }
 
-  const models = (modelsData?.models ?? ['qwen2.5:0.5b']).filter((m: string) => !m.includes('/'))
+  const models = modelsData?.models ?? [selectedModel]
   const quickPrompts = agentMode ? QUICK_PROMPTS_AGENT : QUICK_PROMPTS_CHAT
+  // Label that reflects the AI provider the backend actually uses.
+  const provider = modelsData?.provider
+  const providerLabel =
+    provider === 'openrouter' ? 'Cloud · OpenRouter'
+    : provider === 'grok' ? 'Cloud · Grok'
+    : provider === 'ollama' ? 'Local · Ollama'
+    : 'AI'
 
   return (
     <div className="page-in flex flex-col h-[calc(100vh-64px)] max-w-[900px] mx-auto px-4 py-4">
@@ -299,9 +360,9 @@ export default function AiChatPage() {
               <Bot size={16} className="text-indigo-400" />
             </div>
             <h1 className="font-display text-xl text-ink tracking-tight">AI SMM Menejer</h1>
-            <span className="text-[10px] uppercase tracking-[0.16em] text-faint border border-line rounded px-2 py-0.5">Local · Ollama</span>
+            <span className="text-[10px] uppercase tracking-[0.16em] text-faint border border-line rounded px-2 py-0.5">{providerLabel}</span>
           </div>
-          <p className="text-sm text-mute mt-0.5 ml-10">SMM maslahatchi — internet talab qilmaydi</p>
+          <p className="text-sm text-mute mt-0.5 ml-10">SMM maslahatchingiz — reja tuzadi, post yozadi, jadvalga qo'shadi</p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -382,7 +443,7 @@ export default function AiChatPage() {
               {agentMode ? <Zap size={22} className="text-indigo-400" /> : <Sparkles size={22} className="text-indigo-400" />}
             </div>
             <div className="font-display text-lg text-ink">
-              {agentMode ? 'AI SMM menejer tayyor' : 'ContentFlow AI bilan suhbat'}
+              {agentMode ? 'AI SMM Menejer tayyor' : 'ContentFlow AI bilan suhbat'}
             </div>
             <div className="text-sm text-mute mt-1 max-w-sm">
               {agentMode
@@ -404,7 +465,7 @@ export default function AiChatPage() {
         )}
 
         {messages.map((msg) => (
-          <MessageBubble key={msg.id} msg={msg} onViewCalendar={() => navigate('/calendar')} />
+          <MessageBubble key={msg.id} msg={msg} onViewCalendar={() => navigate('/dashboard/calendar')} />
         ))}
 
         {loading && (
@@ -424,7 +485,49 @@ export default function AiChatPage() {
 
       {/* Input */}
       <div className="mt-3 shrink-0">
+        {/* Attached media chip */}
+        {(attachedMedia || uploadingMedia) && (
+          <div className="mb-2 flex items-center gap-2 bg-surface border border-indigo-500/30 rounded-xl px-3 py-2 w-fit max-w-full">
+            {uploadingMedia ? (
+              <>
+                <Loader2 size={14} className="animate-spin text-indigo-400 shrink-0" />
+                <span className="text-[12px] text-mute">Yuklanmoqda…</span>
+              </>
+            ) : attachedMedia ? (
+              <>
+                {attachedMedia.type === 'video'
+                  ? <Film size={14} className="text-indigo-400 shrink-0" />
+                  : <ImageIcon size={14} className="text-indigo-400 shrink-0" />}
+                <span className="text-[12px] text-ink truncate max-w-[220px]">{attachedMedia.name}</span>
+                <button
+                  onClick={() => setAttachedMedia(null)}
+                  className="p-0.5 rounded text-faint hover:text-rose-400 transition shrink-0"
+                  title="Olib tashlash"
+                >
+                  <X size={13} />
+                </button>
+              </>
+            ) : null}
+          </div>
+        )}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,video/*"
+          onChange={handleFileUpload}
+          className="hidden"
+        />
         <div className="flex items-end gap-2 bg-surface border border-line rounded-2xl px-4 py-3 focus-within:border-indigo-500/50 transition">
+          {agentMode && (
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadingMedia || loading}
+              title="Rasm yoki video biriktirish"
+              className="p-1.5 rounded-md text-faint hover:text-indigo-400 hover:bg-surface2 transition shrink-0 disabled:opacity-40"
+            >
+              <Paperclip size={16} />
+            </button>
+          )}
           <textarea
             ref={inputRef}
             value={input}
@@ -449,7 +552,7 @@ export default function AiChatPage() {
             )}
             <button
               onClick={() => sendMessage()}
-              disabled={!input.trim() || loading}
+              disabled={(!input.trim() && !attachedMedia) || loading}
               className="p-2 rounded-xl bg-indigo-500 text-white hover:bg-indigo-400 transition disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Send size={14} />
@@ -458,8 +561,8 @@ export default function AiChatPage() {
         </div>
         <div className="mt-1.5 text-[11px] text-faint text-center">
           {agentMode
-            ? `Agent rejimi · Ollama · ${selectedModel} · Postlar va jadval boshqaruvi`
-            : `Barcha ma'lumotlar mahalliy qurilmangizda qayta ishlanadi · Ollama · ${selectedModel}`}
+            ? `Agent rejimi · ${selectedModel} · Postlar va jadval boshqaruvi`
+            : `${providerLabel} · ${selectedModel}`}
         </div>
       </div>
     </div>

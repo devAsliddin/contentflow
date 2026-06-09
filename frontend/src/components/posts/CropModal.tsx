@@ -45,8 +45,12 @@ const CATEGORY_COLOR: Record<string, string> = {
 }
 
 // ─── Viewport constants ────────────────────────────────────────────────────────
+// The crop box keeps the EXACT selected aspect ratio. It's fitted inside a
+// max width/height envelope (never clamped on one axis only — that would make
+// the on-screen box aspect differ from the exported aspect and break the crop).
 
-const VP_W = 340   // display width of the crop area in px
+const MAX_VP_W = 360
+const MAX_VP_H = 460
 
 interface Props {
   src: string
@@ -73,31 +77,36 @@ export default function CropModal({ src, onClose, onApply }: Props) {
 
   // Current aspect ratio
   const ratio = custom ? customW / customH : selected.ratio
-  // Clamp viewport height so it doesn't get too tall or too short
-  const vpH = Math.round(VP_W / ratio)
-  const vpHClamped = Math.min(Math.max(vpH, 160), 400)
+  // Fit the crop box inside the max envelope while preserving the exact ratio.
+  // boxW / boxH === ratio always, so the exported scale is identical on both axes.
+  let boxW = MAX_VP_W
+  let boxH = Math.round(boxW / ratio)
+  if (boxH > MAX_VP_H) {
+    boxH = MAX_VP_H
+    boxW = Math.round(boxH * ratio)
+  }
 
-  // Scale image to fill (cover) the viewport
-  const scale = Math.max(VP_W / imgNat.w, vpHClamped / imgNat.h)
+  // Scale image to fill (cover) the crop box
+  const scale = Math.max(boxW / imgNat.w, boxH / imgNat.h)
   const dispW = imgNat.w * scale
   const dispH = imgNat.h * scale
 
   // Clamp offset so image always covers the crop area
   function clamped(x: number, y: number) {
     return {
-      x: Math.min(0, Math.max(VP_W - dispW, x)),
-      y: Math.min(0, Math.max(vpHClamped - dispH, y)),
+      x: Math.min(0, Math.max(boxW - dispW, x)),
+      y: Math.min(0, Math.max(boxH - dispH, y)),
     }
   }
 
   // Center image whenever aspect changes
   useEffect(() => {
     if (imgLoaded) {
-      const cx = (VP_W - dispW) / 2
-      const cy = (vpHClamped - dispH) / 2
+      const cx = (boxW - dispW) / 2
+      const cy = (boxH - dispH) / 2
       setOffset(clamped(cx, cy))
     }
-  }, [selected, custom, customW, customH, imgLoaded, dispW, dispH, vpHClamped])
+  }, [selected, custom, customW, customH, imgLoaded, dispW, dispH, boxW, boxH])
 
   // ── Mouse drag ──────────────────────────────────────────────────────────────
 
@@ -142,7 +151,8 @@ export default function CropModal({ src, onClose, onApply }: Props) {
     const ctx = canvas.getContext('2d')!
     const img = imgRef.current!
 
-    const s = outW / VP_W
+    // boxW/boxH match the output aspect exactly, so a single scale is correct.
+    const s = outW / boxW
     ctx.drawImage(img, -offset.x * s, -offset.y * s, dispW * s, dispH * s)
 
     setApplying(true)
@@ -188,8 +198,8 @@ export default function CropModal({ src, onClose, onApply }: Props) {
             <div
               className="relative overflow-hidden rounded-lg select-none"
               style={{
-                width: VP_W,
-                height: vpHClamped,
+                width: boxW,
+                height: boxH,
                 cursor: dragging ? 'grabbing' : 'grab',
                 boxShadow: '0 0 0 2px rgba(99,102,241,0.5)',
               }}
@@ -220,7 +230,7 @@ export default function CropModal({ src, onClose, onApply }: Props) {
                     'linear-gradient(rgba(255,255,255,0.07) 1px,transparent 1px)',
                     'linear-gradient(90deg,rgba(255,255,255,0.07) 1px,transparent 1px)',
                   ].join(','),
-                  backgroundSize: `${VP_W / 3}px ${vpHClamped / 3}px`,
+                  backgroundSize: `${boxW / 3}px ${boxH / 3}px`,
                 }}
               />
 

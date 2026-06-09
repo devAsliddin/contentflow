@@ -105,16 +105,31 @@ async def _call_anthropic(messages: list[dict], system: str | None = None) -> st
 
 
 async def _call_ai(messages: list[dict], model: str, system: str | None = None) -> str:
-    """Call Anthropic if key available, else Ollama."""
+    """Call Grok (xAI) if key available, else Anthropic, else Ollama."""
     settings = get_settings()
+
+    if settings.xai_api_key:
+        try:
+            from app.services.xai_client import call_xai_chat
+            all_messages = list(messages)
+            if system and (not all_messages or all_messages[0].get("role") != "system"):
+                all_messages = [{"role": "system", "content": system}] + all_messages
+            return await call_xai_chat(all_messages, settings.xai_model)
+        except Exception as exc:
+            logger.warning("Grok chat failed, falling back: %s", exc)
+
     if settings.anthropic_api_key:
         try:
             return await _call_anthropic(messages, system)
         except Exception as exc:
             logger.warning("Anthropic chat failed, falling back to Ollama: %s", exc)
 
-    # Ollama fallback — force local model if an OpenRouter path was passed
-    local_model = model if "/" not in model else DEFAULT_OLLAMA_MODEL
+    # OpenRouter free model as primary fallback (model name has "/" → routed there).
+    if settings.openrouter_api_key:
+        local_model = settings.openrouter_model
+    else:
+        # Local Ollama — force a local model if an OpenRouter path was passed.
+        local_model = model if "/" not in model else DEFAULT_OLLAMA_MODEL
     all_messages = list(messages)
     if system and (not all_messages or all_messages[0].get("role") != "system"):
         all_messages = [{"role": "system", "content": system}] + all_messages
@@ -171,7 +186,23 @@ async def plan_chat(
 async def list_models(
     current_user: User = Depends(get_current_user),
 ):
-    """List available AI models — local Ollama has priority."""
+    """List available AI models — Grok (xAI) has priority when configured."""
+    settings = get_settings()
+    if settings.xai_api_key:
+        return {
+            "models": [settings.xai_model, settings.xai_vision_model],
+            "default": settings.xai_model,
+            "status": "ok",
+            "provider": "grok",
+        }
+    if settings.openrouter_api_key:
+        return {
+            "models": [settings.openrouter_model],
+            "default": settings.openrouter_model,
+            "status": "ok",
+            "provider": "openrouter",
+        }
+
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.get(f"{ollama_url()}/api/tags")
@@ -191,5 +222,4 @@ async def list_models(
         "models": [DEFAULT_OLLAMA_MODEL],
         "default": DEFAULT_OLLAMA_MODEL,
         "status": "offline",
-        "provider": "none",
     }

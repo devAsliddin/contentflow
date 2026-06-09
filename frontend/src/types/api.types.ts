@@ -66,6 +66,8 @@ export interface PlanPost {
   platform: string
   idea: string
   scheduled_time: string  // "HH:MM"
+  content_type?: string   // "image" | "video"
+  video_brief?: string    // what video to prepare when content_type === "video"
 }
 
 export interface WeeklyPlan {

@@ -208,7 +208,7 @@ export default function AiPlanPage() {
             <div className="flex items-center gap-2">
               <h1 className="font-display text-[18px] text-ink tracking-tight">AI Kontent Menejeri</h1>
               <span className="text-[10px] uppercase tracking-[0.14em] text-faint border border-line rounded px-2 py-0.5">
-                Ollama · Local
+                Grok · xAI
               </span>
             </div>
             {accounts.length > 0 && (
@@ -351,7 +351,7 @@ export default function AiPlanPage() {
           </div>
         </div>
         <div className="mt-1.5 text-[11px] text-faint text-center">
-          Barcha ma'lumotlar mahalliy qurilmangizda · Ollama · {selectedModel}
+          Grok (xAI) bilan ishlaydi · {selectedModel}
         </div>
       </div>
     </div>

@@ -9,7 +9,7 @@ const TITLES: Record<string, { eyebrow: string; title: string }> = {
   '/dashboard/preview':    { eyebrow: 'Preview',   title: 'Post preview' },
   '/dashboard/calendar':   { eyebrow: 'Schedule',  title: 'Content calendar' },
   '/dashboard/accounts':   { eyebrow: 'Network',   title: 'Connected accounts' },
-  '/dashboard/ai-chat':    { eyebrow: 'AI',        title: 'AI SMM menejer' },
+  '/dashboard/ai-chat':    { eyebrow: 'AI',        title: 'AI SMM Menejer' },
   '/dashboard/analytics':  { eyebrow: 'Insights',  title: 'Analytics' },
   '/dashboard/settings':   { eyebrow: 'Workspace', title: 'Settings' },
   '/dashboard/admin':      { eyebrow: 'System',    title: 'Admin panel' },

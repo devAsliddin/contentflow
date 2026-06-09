@@ -1,0 +1,26 @@
+{
+  "agent": "backend",
+  "version": "v4",
+  "tasks": [
+    {
+      "id": "BE-V4-002",
+      "status": "done",
+      "notes": "Instagram OAuth connect (/api/accounts/instagram/oauth/start|callback). Long-lived token, Fernet-encrypted, ig_user_id stored, webhook auto-subscribe. Token via query param for top-level redirect. Daily token refresh beat task."
+    },
+    {
+      "id": "BE-V4-003",
+      "status": "done",
+      "notes": "Webhook GET verify + POST receive (/api/webhooks/instagram). X-Hub-Signature-256 HMAC verify on raw body, immediate 200, enqueue Celery."
+    },
+    {
+      "id": "BE-V4-004",
+      "status": "done",
+      "notes": "Rules CRUD + logs router with ownership checks. Pydantic cross-field validation (keywords/comment_action). AccountOut exposes ig_user_id + ig_webhook_subscribed."
+    },
+    {
+      "id": "BE-V4-005",
+      "status": "done",
+      "notes": "Celery process_instagram_event + handle_match: loop protection, idempotency (ON CONFLICT), DM 200/h rate limit, 24h window, Graph API send (DM/public/private/both), retry only on 5xx."
+    }
+  ]
+}

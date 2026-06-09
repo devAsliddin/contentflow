@@ -7,6 +7,9 @@ export interface Account {
   account_name: string
   is_active: boolean
   created_at: string
+  // V4 — set for Instagram accounts connected for auto-reply
+  ig_user_id?: string | null
+  ig_webhook_subscribed?: boolean
 }
 
 export interface AccountCredentials {

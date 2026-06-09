@@ -33,6 +33,9 @@ EXT_MAP = {
     "video/mp4": ".mp4", "video/quicktime": ".mov",
 }
 
+# Reuse the same magic-bytes validation from upload.py
+from app.routers.upload import _validate_magic  # noqa: E402
+
 VALID_TRANSITIONS: dict[str, list[str]] = {
     "draft": ["pending_review", "scheduled"],
     "pending_review": ["approved", "draft"],
@@ -49,6 +52,10 @@ VALID_TRANSITIONS: dict[str, list[str]] = {
 class StatusTransitionRequest(BaseModel):
     status: str = Field(..., description="Target status")
     scheduled_at: datetime | None = Field(default=None)
+
+
+# Statuses that require admin approval — users cannot self-promote to these
+_ADMIN_ONLY_STATUSES = {"approved", "published"}
 
 
 @router.put("/posts/{post_id}/status", response_model=PostOut)
@@ -70,11 +77,20 @@ async def transition_post_status(
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
 
+    # Validate the transition first — an impossible transition is a 400 regardless
+    # of who requests it (e.g. draft → published is never allowed for anyone).
     allowed = VALID_TRANSITIONS.get(post.status, [])
     if data.status not in allowed:
         raise HTTPException(
             status_code=400,
             detail=f"Cannot transition from '{post.status}' to '{data.status}'. Allowed: {allowed}",
+        )
+
+    # For otherwise-valid transitions, approving or publishing requires admin.
+    if data.status in _ADMIN_ONLY_STATUSES and not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Only admins can approve or publish posts",
         )
 
     post.status = data.status
@@ -225,6 +241,15 @@ async def bulk_upload_media(
                     url="", filename=file.filename or "unknown",
                     media_type=media_type, size_bytes=size,
                     error=f"File too large. Max {limit_mb}MB",
+                ))
+                failed += 1
+                continue
+
+            if not _validate_magic(contents, content_type):
+                items.append(BulkUploadItem(
+                    url="", filename=file.filename or "unknown",
+                    media_type=media_type, size_bytes=size,
+                    error="File content does not match declared type",
                 ))
                 failed += 1
                 continue

@@ -1,0 +1,11 @@
+{
+  "agent": "database",
+  "version": "v4",
+  "tasks": [
+    {
+      "id": "DB-V4-001",
+      "status": "done",
+      "notes": "Migration 007_v4_autoreply: autoreply_rules + autoreply_logs tables, accounts.ig_user_id + ig_webhook_subscribed. UNIQUE(account_id, ig_object_id) for idempotency. VARCHAR+CHECK instead of native ENUM (documented). Full downgrade()."
+    }
+  ]
+}

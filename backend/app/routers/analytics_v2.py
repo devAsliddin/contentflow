@@ -75,8 +75,8 @@ async def generate_weekly_report(
         from reportlab.lib import colors
     except ImportError:
         raise HTTPException(
-            status_code=500,
-            detail="reportlab package not installed. Run: pip install reportlab",
+            status_code=501,
+            detail="PDF report export is not available",
         )
 
     now = datetime.now(timezone.utc)

@@ -83,7 +83,7 @@ export default function AiSuggestions() {
           <div className="flex items-center justify-between">
             <PlatformChip kind={idea.platform as PlatformKind} size={18} />
             <button
-              onClick={() => navigate('/new-post')}
+              onClick={() => navigate('/dashboard/new-post')}
               className="text-[12px] font-medium text-indigo-400 hover:text-indigo-500 inline-flex items-center gap-1 group"
             >
               Use this idea
