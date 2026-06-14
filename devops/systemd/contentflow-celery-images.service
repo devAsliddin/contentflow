@@ -1,0 +1,31 @@
+[Unit]
+Description=ContentFlow Celery Images Worker (dedicated -Q images queue)
+After=network.target redis.service postgresql.service
+Wants=redis.service postgresql.service
+
+[Service]
+Type=exec
+User=contentflow
+Group=contentflow
+WorkingDirectory=/var/www/contentflow/backend
+EnvironmentFile=/etc/contentflow/.env
+ExecStart=/var/www/contentflow/venv/bin/celery \
+    -A app.tasks.celery_app worker \
+    --loglevel=info \
+    --concurrency=2 \
+    --queues=images \
+    --hostname=images@%h \
+    --logfile=/var/log/contentflow/celery-images.log
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=contentflow-celery-images
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=/var/www/contentflow/media /var/log/contentflow
+
+[Install]
+WantedBy=multi-user.target

@@ -37,6 +37,14 @@ class AutoReplyRule(Base):
     reply_text: Mapped[str] = mapped_column(Text, nullable=False)
     # Only used for target='comment': reply_public | reply_private | both
     comment_action: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # V6: multi-platform + AI reply mode
+    platform: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="instagram", server_default="instagram"
+    )
+    reply_mode: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="template", server_default="template"
+    )
+    ai_context: Mapped[str | None] = mapped_column(Text, nullable=True)
     priority: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
@@ -68,6 +76,11 @@ class AutoReplyLog(Base):
     )
     event_type: Mapped[str] = mapped_column(String(16), nullable=False)        # 'dm' | 'comment'
     ig_object_id: Mapped[str] = mapped_column(String(255), nullable=False)     # comment_id / message_id
+    # V6: multi-platform + AI reply mode tracking
+    platform: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="instagram", server_default="instagram"
+    )
+    reply_mode: Mapped[str | None] = mapped_column(String(16), nullable=True)
     sender_ig_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     incoming_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     matched_keyword: Mapped[str | None] = mapped_column(String(255), nullable=True)

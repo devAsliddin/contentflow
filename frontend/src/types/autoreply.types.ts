@@ -1,6 +1,8 @@
 export type AutoReplyTarget = 'dm' | 'comment'
 export type AutoReplyMatchType = 'contains' | 'exact' | 'starts_with' | 'any'
 export type CommentAction = 'reply_public' | 'reply_private' | 'both'
+// V6: reply_mode — 'template' = tayyor matn, 'ai' = AI javob
+export type ReplyMode = 'template' | 'ai'
 
 export type AutoReplyStatus =
   | 'sent'
@@ -25,6 +27,10 @@ export interface AutoReplyRule {
   is_active: boolean
   created_at: string
   updated_at: string | null
+  // V6 fields
+  platform?: string          // 'instagram' | 'facebook', default 'instagram'
+  reply_mode?: ReplyMode     // 'template' | 'ai', default 'template'
+  ai_context?: string | null
 }
 
 export interface AutoReplyRuleInput {
@@ -37,6 +43,10 @@ export interface AutoReplyRuleInput {
   comment_action?: CommentAction | null
   priority: number
   is_active: boolean
+  // V6 fields
+  platform?: string
+  reply_mode?: ReplyMode
+  ai_context?: string | null
 }
 
 export interface AutoReplyLog {
@@ -52,4 +62,7 @@ export interface AutoReplyLog {
   status: AutoReplyStatus
   error_detail: string | null
   created_at: string
+  // V6 fields
+  platform?: string | null
+  reply_mode?: ReplyMode | null
 }

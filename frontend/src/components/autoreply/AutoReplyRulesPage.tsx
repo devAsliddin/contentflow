@@ -12,6 +12,8 @@ import ConnectInstagramButton from './ConnectInstagramButton'
 import AutoReplyLogsPanel from './AutoReplyLogsPanel'
 import type { AutoReplyRule } from '@/types/autoreply.types'
 
+type PlatformFilter = 'instagram' | 'facebook'
+
 export default function AutoReplyRulesPage() {
   const qc = useQueryClient()
   const [params, setParams] = useSearchParams()
@@ -19,6 +21,7 @@ export default function AutoReplyRulesPage() {
   const [editorOpen, setEditorOpen] = useState(false)
   const [editing, setEditing] = useState<AutoReplyRule | null>(null)
   const [showLogs, setShowLogs] = useState(false)
+  const [platformFilter, setPlatformFilter] = useState<PlatformFilter>('instagram')
 
   // Toast on OAuth return
   useEffect(() => {
@@ -30,13 +33,26 @@ export default function AutoReplyRulesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const { data: accounts, isLoading: accLoading } = useQuery({
-    queryKey: ['accounts', 'instagram'],
-    queryFn: () => accountsService.list('instagram'),
+  const { data: allAccounts, isLoading: accLoading } = useQuery({
+    queryKey: ['accounts'],
+    queryFn: () => accountsService.list(),
   })
 
-  // Accounts connected for auto-reply have ig_user_id set.
-  const connected = useMemo(() => (accounts || []).filter((a) => a.ig_user_id), [accounts])
+  // IG: accounts with ig_user_id; FB: platform='facebook' accounts
+  const igAccounts = useMemo(
+    () => (allAccounts || []).filter((a) => a.platform === 'instagram' && a.ig_user_id),
+    [allAccounts]
+  )
+  const fbAccounts = useMemo(
+    () => (allAccounts || []).filter((a) => a.platform === 'facebook'),
+    [allAccounts]
+  )
+
+  const connected = platformFilter === 'instagram' ? igAccounts : fbAccounts
+
+  useEffect(() => {
+    setAccountId('')
+  }, [platformFilter])
 
   useEffect(() => {
     if (!accountId && connected.length > 0) setAccountId(connected[0].id)
@@ -88,14 +104,37 @@ export default function AutoReplyRulesPage() {
         <div>
           <h1 className="font-display text-2xl text-ink tracking-tight">Avtomatik javob</h1>
           <p className="text-sm text-mute mt-1">
-            Instagram DM va commentlarga kalit so'z asosida avtomatik javob bering.
+            DM va commentlarga kalit so'z asosida avtomatik javob bering.
           </p>
         </div>
-        {connected.length > 0 && <ConnectInstagramButton compact />}
+        {platformFilter === 'instagram' && connected.length > 0 && <ConnectInstagramButton compact />}
+      </div>
+
+      {/* Platform tab filter: IG | FB */}
+      <div className="inline-flex rounded-lg border border-line p-0.5 bg-bg mb-5">
+        {(['instagram', 'facebook'] as PlatformFilter[]).map((pf) => (
+          <button
+            key={pf}
+            onClick={() => setPlatformFilter(pf)}
+            className={`px-4 py-1.5 rounded-md text-sm transition ${
+              platformFilter === pf ? 'bg-indigo-500 text-white' : 'text-mute hover:text-ink'
+            }`}
+          >
+            {pf === 'instagram' ? 'Instagram' : 'Facebook'}
+          </button>
+        ))}
       </div>
 
       {connected.length === 0 ? (
-        <ConnectInstagramButton />
+        platformFilter === 'instagram' ? (
+          <ConnectInstagramButton />
+        ) : (
+          <div className="bg-surface border border-line rounded-2xl p-10 text-center">
+            <p className="text-mute text-sm mb-4">
+              Facebook sahifasi ulanmagan. Avval Accounts sahifasidan Facebook sahifangizni ulang.
+            </p>
+          </div>
+        )
       ) : (
         <>
           {/* Account selector + actions */}
@@ -181,6 +220,8 @@ function RuleCard({
   onDelete: () => void
 }) {
   const TargetIcon = rule.target === 'dm' ? MessageSquare : MessagesSquare
+  const platform = rule.platform || 'instagram'
+  const replyMode = rule.reply_mode || 'template'
   return (
     <div className="bg-surface border border-line rounded-xl p-4 flex items-start gap-4">
       <div className="flex-1 min-w-0">
@@ -191,6 +232,22 @@ function RuleCard({
             {rule.target}
           </span>
           <span className="text-[10px] uppercase tracking-wide text-faint">{rule.match_type}</span>
+          {/* V6: platform badge */}
+          <span className={`px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wide ${
+            platform === 'facebook'
+              ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+              : 'bg-pink-500/10 text-pink-400 border border-pink-500/20'
+          }`}>
+            {platform === 'facebook' ? 'FB' : 'IG'}
+          </span>
+          {/* V6: reply_mode badge */}
+          <span className={`px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wide ${
+            replyMode === 'ai'
+              ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
+              : 'bg-bg border border-line text-faint'
+          }`}>
+            {replyMode === 'ai' ? 'AI' : 'Tayyor'}
+          </span>
           {rule.priority !== 0 && (
             <span className="text-[10px] text-faint">P{rule.priority}</span>
           )}

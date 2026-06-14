@@ -47,33 +47,56 @@ export default function AutoReplyLogsPanel({ accountId }: { accountId: string })
         <thead>
           <tr className="text-[10px] uppercase tracking-[0.14em] text-faint text-left">
             <th className="py-2 pr-3 font-medium">Vaqt</th>
+            <th className="py-2 pr-3 font-medium">Platforma</th>
             <th className="py-2 pr-3 font-medium">Tur</th>
             <th className="py-2 pr-3 font-medium">Kelgan matn</th>
             <th className="py-2 pr-3 font-medium">Status</th>
           </tr>
         </thead>
         <tbody>
-          {logs.map((log) => (
-            <tr key={log.id} className="border-t border-line align-top">
-              <td className="py-2.5 pr-3 text-faint whitespace-nowrap text-xs">
-                {new Date(log.created_at).toLocaleString()}
-              </td>
-              <td className="py-2.5 pr-3 text-mute uppercase text-xs">{log.event_type}</td>
-              <td className="py-2.5 pr-3 text-ink max-w-[280px] truncate" title={log.incoming_text ?? ''}>
-                {log.incoming_text || <span className="text-faint">—</span>}
-                {log.error_detail && (
-                  <span className="block text-[11px] text-rose-400 truncate" title={log.error_detail}>
-                    {log.error_detail}
-                  </span>
-                )}
-              </td>
-              <td className="py-2.5 pr-3">
-                <StatusPill kind={STATUS_KIND[log.status] || 'draft'}>
-                  {STATUS_LABEL[log.status] || log.status}
-                </StatusPill>
-              </td>
-            </tr>
-          ))}
+          {logs.map((log) => {
+            const platform = log.platform || 'instagram'
+            const replyMode = log.reply_mode || 'template'
+            return (
+              <tr key={log.id} className="border-t border-line align-top">
+                <td className="py-2.5 pr-3 text-faint whitespace-nowrap text-xs">
+                  {new Date(log.created_at).toLocaleString()}
+                </td>
+                <td className="py-2.5 pr-3">
+                  <div className="flex flex-col gap-1">
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                      platform === 'facebook'
+                        ? 'bg-blue-500/10 text-blue-400'
+                        : 'bg-pink-500/10 text-pink-400'
+                    }`}>
+                      {platform === 'facebook' ? 'FB' : 'IG'}
+                    </span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                      replyMode === 'ai'
+                        ? 'bg-indigo-500/10 text-indigo-400'
+                        : 'bg-bg border border-line text-faint'
+                    }`}>
+                      {replyMode === 'ai' ? 'AI' : 'Tayyor'}
+                    </span>
+                  </div>
+                </td>
+                <td className="py-2.5 pr-3 text-mute uppercase text-xs">{log.event_type}</td>
+                <td className="py-2.5 pr-3 text-ink max-w-[240px] truncate" title={log.incoming_text ?? ''}>
+                  {log.incoming_text || <span className="text-faint">—</span>}
+                  {log.error_detail && (
+                    <span className="block text-[11px] text-rose-400 truncate" title={log.error_detail}>
+                      {log.error_detail}
+                    </span>
+                  )}
+                </td>
+                <td className="py-2.5 pr-3">
+                  <StatusPill kind={STATUS_KIND[log.status] || 'draft'}>
+                    {STATUS_LABEL[log.status] || log.status}
+                  </StatusPill>
+                </td>
+              </tr>
+            )
+          })}
         </tbody>
       </table>
     </div>

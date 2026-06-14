@@ -1,0 +1,14 @@
+{
+  "agent": "celery",
+  "version": "v6",
+  "status": "done",
+  "tasks_done": [
+    "app/tasks/image_tasks.py — generate_image_task (queue=images)",
+    "app/tasks/facebook_autoreply.py — process_facebook_event (default queue), fb_token_health_check, cleanup_old_image_jobs",
+    "app/tasks/ai_reply.py — generate_ai_reply shared helper",
+    "app/tasks/instagram_autoreply.py — reply_mode=ai branch in _handle_match",
+    "app/tasks/celery_app.py — include + task_routes + beat schedule updated"
+  ],
+  "blockers": [],
+  "updated_at": "2026-06-11T17:00:00Z"
+}

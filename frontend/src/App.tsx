@@ -19,7 +19,11 @@ import TemplatesPage from '@/pages/TemplatesPage'
 import AutoReplyRulesPage from '@/components/autoreply/AutoReplyRulesPage'
 import PrivacyPage from '@/pages/PrivacyPage'
 import TermsPage from '@/pages/TermsPage'
+import DataDeletionPage from '@/pages/DataDeletionPage'
 import ContactPage from '@/pages/ContactPage'
+import AIAnalystPage from '@/pages/AIAnalystPage'
+import AIPostsListPage from '@/pages/AIPostsListPage'
+import AIPostCreatorPage from '@/pages/AIPostCreatorPage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
@@ -44,6 +48,7 @@ export default function App() {
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/terms" element={<TermsPage />} />
+        <Route path="/data-deletion" element={<DataDeletionPage />} />
         <Route path="/contact" element={<ContactPage />} />
 
         {/* Protected app routes */}
@@ -68,6 +73,9 @@ export default function App() {
           <Route path="approval" element={<ApprovalPage />} />
           <Route path="templates" element={<TemplatesPage />} />
           <Route path="autoreply" element={<AutoReplyRulesPage />} />
+          <Route path="accounts/:id/ai-analyst" element={<AIAnalystPage />} />
+          <Route path="ai-posts" element={<AIPostsListPage />} />
+          <Route path="ai-posts/create" element={<AIPostCreatorPage />} />
           <Route
             path="admin"
             element={

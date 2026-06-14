@@ -27,6 +27,17 @@ class Account(Base):
     ig_webhook_subscribed: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False, server_default="false"
     )
+    # V6: Facebook Page integration
+    fb_user_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    fb_page_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    fb_page_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    fb_webhook_subscribed: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="false"
+    )
+    # token health-check: active | expired
+    token_status: Mapped[str] = mapped_column(
+        String(16), default="active", nullable=False, server_default="active"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

@@ -474,7 +474,7 @@ export default function NewPostPage() {
         image_url: mediaUrl || undefined,
       })
       const tags = result.hashtags.length > 0
-        ? '\n\n' + result.hashtags.map((h) => `#${h}`).join(' ')
+        ? '\n\n' + result.hashtags.map((h) => `#${h.replace(/^#+/, '')}`).join(' ')
         : ''
       setCaption(result.caption + tags)
       toast.success(mediaUrl ? 'Rasm asosida caption yaratildi' : 'Caption yaratildi')

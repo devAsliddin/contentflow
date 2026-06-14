@@ -3,7 +3,7 @@ import * as Dialog from '@radix-ui/react-dialog'
 import * as Switch from '@radix-ui/react-switch'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { X, Loader2, Plus } from 'lucide-react'
+import { X, Loader2, Plus, AlertCircle } from 'lucide-react'
 import Btn from '@/components/ui/Btn'
 import { autoreplyService } from '@/services/autoreply.service'
 import type {
@@ -12,6 +12,7 @@ import type {
   AutoReplyTarget,
   AutoReplyMatchType,
   CommentAction,
+  ReplyMode,
 } from '@/types/autoreply.types'
 
 interface Props {
@@ -25,7 +26,7 @@ const MATCH_TYPES: { value: AutoReplyMatchType; label: string }[] = [
   { value: 'contains', label: 'Contains' },
   { value: 'exact', label: 'Exact' },
   { value: 'starts_with', label: 'Starts with' },
-  { value: 'any', label: 'Any (kalit so‘zsiz)' },
+  { value: 'any', label: "Any (kalit so'zsiz)" },
 ]
 
 const COMMENT_ACTIONS: { value: CommentAction; label: string }[] = [
@@ -47,6 +48,9 @@ function emptyForm(): AutoReplyRuleInput {
     comment_action: 'reply_public',
     priority: 0,
     is_active: true,
+    platform: 'instagram',
+    reply_mode: 'template',
+    ai_context: null,
   }
 }
 
@@ -69,6 +73,9 @@ export default function RuleEditorDialog({ accountId, open, onOpenChange, rule }
               comment_action: rule.comment_action ?? 'reply_public',
               priority: rule.priority,
               is_active: rule.is_active,
+              platform: rule.platform || 'instagram',
+              reply_mode: rule.reply_mode || 'template',
+              ai_context: rule.ai_context ?? null,
             }
           : emptyForm(),
       )
@@ -109,14 +116,17 @@ export default function RuleEditorDialog({ accountId, open, onOpenChange, rule }
 
   function submit() {
     if (!form.name.trim()) return toast.error('Qoida nomini kiriting')
-    if (!form.reply_text.trim()) return toast.error('Javob matnini kiriting')
+    if (form.reply_mode === 'template' && !form.reply_text.trim())
+      return toast.error('Javob matnini kiriting')
     if (form.match_type !== 'any' && form.keywords.length === 0)
-      return toast.error('Kamida bitta kalit so‘z qo‘shing')
+      return toast.error('Kamida bitta kalit so\'z qo\'shing')
 
     const payload: AutoReplyRuleInput = {
       ...form,
       comment_action: form.target === 'comment' ? form.comment_action : null,
       keywords: form.match_type === 'any' ? [] : form.keywords,
+      reply_text: form.reply_mode === 'ai' ? '' : form.reply_text,
+      ai_context: form.reply_mode === 'ai' ? (form.ai_context || null) : null,
     }
     mutation.mutate(payload)
   }
@@ -149,7 +159,7 @@ export default function RuleEditorDialog({ accountId, open, onOpenChange, rule }
                 className={inputCls}
                 value={form.name}
                 onChange={(e) => set('name', e.target.value)}
-                placeholder="Masalan: Narx so‘rovlari"
+                placeholder="Masalan: Narx so'rovlari"
               />
             </div>
 
@@ -235,21 +245,62 @@ export default function RuleEditorDialog({ accountId, open, onOpenChange, rule }
               </Switch.Root>
             </label>
 
+            {/* V6: reply_mode switch */}
             <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className={labelCls + ' mb-0'}>Javob matni</label>
-                <span className={`text-[10px] ${form.reply_text.length > REPLY_LIMIT ? 'text-rose-500' : 'text-faint'}`}>
-                  {form.reply_text.length}/{REPLY_LIMIT}
-                </span>
+              <label className={labelCls}>Javob usuli</label>
+              <div className="inline-flex rounded-lg border border-line p-0.5 bg-bg">
+                {(['template', 'ai'] as ReplyMode[]).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => set('reply_mode', mode)}
+                    className={`px-4 py-1.5 rounded-md text-sm transition ${
+                      form.reply_mode === mode ? 'bg-indigo-500 text-white' : 'text-mute hover:text-ink'
+                    }`}
+                  >
+                    {mode === 'template' ? 'Tayyor matn' : 'AI javob'}
+                  </button>
+                ))}
               </div>
-              <textarea
-                className={inputCls + ' min-h-[90px] resize-y'}
-                value={form.reply_text}
-                maxLength={REPLY_LIMIT}
-                onChange={(e) => set('reply_text', e.target.value)}
-                placeholder="Avtomatik yuboriladigan javob..."
-              />
             </div>
+
+            {form.reply_mode === 'template' ? (
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className={labelCls + ' mb-0'}>Javob matni</label>
+                  <span className={`text-[10px] ${form.reply_text.length > REPLY_LIMIT ? 'text-rose-500' : 'text-faint'}`}>
+                    {form.reply_text.length}/{REPLY_LIMIT}
+                  </span>
+                </div>
+                <textarea
+                  className={inputCls + ' min-h-[90px] resize-y'}
+                  value={form.reply_text}
+                  maxLength={REPLY_LIMIT}
+                  onChange={(e) => set('reply_text', e.target.value)}
+                  placeholder="Avtomatik yuboriladigan javob..."
+                />
+              </div>
+            ) : (
+              <div>
+                {/* AI javob ogohlantirish banneri */}
+                <div className="flex items-start gap-2 text-[11px] text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2 mb-3">
+                  <AlertCircle size={13} className="shrink-0 mt-0.5" />
+                  <span>
+                    AI javoblari akkaunt toningizda yoziladi. Natijalarni Loglar bo'limida kuzating.
+                  </span>
+                </div>
+                <label className={labelCls}>AI kontekst (ixtiyoriy)</label>
+                <textarea
+                  className={inputCls + ' min-h-[80px] resize-y'}
+                  value={form.ai_context || ''}
+                  onChange={(e) => set('ai_context', e.target.value || null)}
+                  placeholder="Masalan: Faqat mahsulot haqida javob ber. Narx so'ralsa, DM ga yo'nalt..."
+                />
+                <p className="text-[11px] text-faint mt-1">
+                  Bu matn AI ga qo'shimcha ko'rsatma sifatida beriladi.
+                </p>
+              </div>
+            )}
 
             {form.target === 'comment' && (
               <div>

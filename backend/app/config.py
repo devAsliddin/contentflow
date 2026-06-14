@@ -27,6 +27,8 @@ class Settings(BaseSettings):
 
     # Ollama
     ollama_url: str = "http://localhost:11434"
+    # V5: model used when an AI_*_PROVIDER is set to "ollama"
+    ollama_model: str = "qwen2.5:7b"
 
     # xAI (Grok) — primary AI provider when xai_api_key is set.
     # OpenAI-compatible API; replaces local Ollama. Get a key at https://console.x.ai
@@ -42,6 +44,26 @@ class Settings(BaseSettings):
 
     # Anthropic
     anthropic_api_key: str = ""
+    anthropic_analysis_model: str = "claude-sonnet-4-20250514"
+
+    # V5 — AI Provider routing (free-first)
+    ai_analysis_provider: str = "groq"       # profil + tavsiyalar
+    ai_classification_provider: str = "vllm" # caption klassifikatsiya
+    ai_content_provider: str = "groq"        # kontent g'oyalari
+    ai_fallback_chain: str = "groq,openrouter,vllm"
+
+    # Groq
+    groq_api_key: str = ""
+    groq_model: str = "llama-3.3-70b-versatile"
+    groq_max_retries: int = 5
+
+    # vLLM (OpenAI-compatible local server)
+    vllm_base_url: str = "http://127.0.0.1:8000/v1"
+    vllm_model: str = "Qwen2.5-7B-Instruct"
+
+    # V5 — Analysis settings
+    analysis_media_limit: int = 50
+    analysis_classify_chunk_size: int = 10
 
     # Instagram
     instagram_app_id: str = ""
@@ -63,9 +85,25 @@ class Settings(BaseSettings):
     # Telegram
     telegram_bot_token: str = ""
 
-    # Facebook
-    facebook_app_id: str = ""
-    facebook_app_secret: str = ""
+    # Facebook (V6)
+    fb_app_id: str = ""
+    fb_app_secret: str = ""
+    fb_oauth_redirect_uri: str = ""
+    fb_graph_version: str = "v23.0"
+    fb_webhook_verify_token: str = ""
+
+    # Image generation (V6)
+    image_provider: str = "cloudflare"
+    image_fallback_chain: str = "cloudflare,pollinations"
+    cloudflare_account_id: str = ""
+    cloudflare_api_token: str = ""
+    cloudflare_image_model: str = "@cf/black-forest-labs/flux-1-schnell"
+    pollinations_base_url: str = "https://image.pollinations.ai"
+    # Optional free token (register at https://enter.pollinations.ai) — anonymous
+    # tier is now paywalled (402). Sent as a Bearer header when set.
+    pollinations_api_token: str = ""
+    image_default_size: str = "1024x1024"
+    image_rate_limit_per_user_hour: int = 10
 
     # LinkedIn
     linkedin_client_id: str = ""
@@ -96,6 +134,37 @@ class Settings(BaseSettings):
     @property
     def meta_app_secret_resolved(self) -> str:
         return self.meta_app_secret or self.instagram_app_secret
+
+    @property
+    def instagram_login_app_id(self) -> str:
+        """Instagram Business Login (instagram.com/oauth) requires the Instagram
+        app ID, which is DIFFERENT from the Facebook/Meta app ID. Falls back to
+        the Meta app ID only if no dedicated Instagram app ID is configured."""
+        return self.instagram_app_id or self.meta_app_id_resolved
+
+    @property
+    def instagram_login_app_secret(self) -> str:
+        """Instagram app secret (pairs with instagram_login_app_id)."""
+        return self.instagram_app_secret or self.meta_app_secret_resolved
+
+    @property
+    def fb_app_id_resolved(self) -> str:
+        """FB app id — falls back to meta_app_id_resolved if fb_app_id is empty."""
+        return self.fb_app_id or self.meta_app_id_resolved
+
+    @property
+    def fb_app_secret_resolved(self) -> str:
+        """FB app secret — falls back to meta_app_secret_resolved if fb_app_secret is empty."""
+        return self.fb_app_secret or self.meta_app_secret_resolved
+
+    @property
+    def image_default_size_wh(self) -> tuple[int, int]:
+        """Parse IMAGE_DEFAULT_SIZE ('WxH') into (width, height) integers."""
+        try:
+            w_str, h_str = self.image_default_size.lower().split("x")
+            return int(w_str.strip()), int(h_str.strip())
+        except Exception:
+            return 1024, 1024
 
     @property
     def cors_origins(self) -> list[str]:

@@ -173,15 +173,43 @@ async def _handle_match(db, account, target, text, sender_id, object_id):
                         status="skipped_rate_limit")
         return
 
-    # ── Decrypt token + send reply ────────────────────────────────────────────
+    # ── Decrypt token + determine reply text ─────────────────────────────────
     from app.services.encryption import decrypt_credentials
     from app.services import instagram_graph as ig
 
     try:
         creds = decrypt_credentials(account.credentials)
         token = creds.get("access_token", "")
+    except Exception as exc:  # noqa: BLE001
+        await _finalize(db, account.id, object_id, rule_id=matched_rule.id,
+                        matched_keyword=matched_kw, reply_text=None,
+                        status="failed", error_detail=f"Credential error: {str(exc)[:500]}")
+        return
+
+    reply_mode = matched_rule.reply_mode or "template"
+
+    # ── AI reply branch ───────────────────────────────────────────────────────
+    if reply_mode == "ai":
+        from app.tasks.ai_reply import generate_ai_reply  # noqa: PLC0415
+
+        reply = await generate_ai_reply(
+            account=account,
+            rule=matched_rule,
+            comment_text=text,
+            post_context=None,
+        )
+        if reply is None:
+            # AI decided to skip (spam/off-topic/unavailable)
+            await _finalize(db, account.id, object_id, rule_id=matched_rule.id,
+                            matched_keyword=matched_kw, reply_text=None,
+                            status="skipped_ai")
+            return
+    else:
+        # template mode (original behaviour)
         reply = matched_rule.reply_text
 
+    # ── Send reply ────────────────────────────────────────────────────────────
+    try:
         if target == "dm":
             await ig.send_dm(token, sender_id, reply)
         else:
@@ -196,14 +224,14 @@ async def _handle_match(db, account, target, text, sender_id, object_id):
 
     except ig.GraphAPIError as exc:
         await _finalize(db, account.id, object_id, rule_id=matched_rule.id,
-                        matched_keyword=matched_kw, reply_text=matched_rule.reply_text,
+                        matched_keyword=matched_kw, reply_text=reply,
                         status="failed", error_detail=exc.detail[:1000])
         # Retry only on 5xx / unknown — 4xx is permanent.
         if exc.status_code is None or exc.status_code >= 500:
             raise process_instagram_event.retry(countdown=30)  # noqa: RET503
     except Exception as exc:  # noqa: BLE001
         await _finalize(db, account.id, object_id, rule_id=matched_rule.id,
-                        matched_keyword=matched_kw, reply_text=matched_rule.reply_text,
+                        matched_keyword=matched_kw, reply_text=reply,
                         status="failed", error_detail=str(exc)[:1000])
 
 

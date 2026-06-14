@@ -3,7 +3,7 @@ import {
   LayoutDashboard, PlusCircle, CalendarDays, UsersRound,
   Sparkles, LineChart, Settings2, PanelLeftClose, PanelLeftOpen,
   ChevronUp, ShieldCheck, LogOut, FileEdit, ClipboardCheck, Layers,
-  ChevronDown, X, MessageSquare, MonitorPlay, Bot,
+  ChevronDown, X, MessageSquare, MonitorPlay, Bot, WandSparkles,
 } from 'lucide-react'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
@@ -22,10 +22,11 @@ const NAV_TOP = [
 ]
 
 const NAV_WORKFLOW = [
-  { to: '/dashboard/drafts',    label: 'Drafts',    icon: FileEdit },
-  { to: '/dashboard/approval',  label: 'Approval',  icon: ClipboardCheck },
-  { to: '/dashboard/templates', label: 'Templates', icon: Layers },
-  { to: '/dashboard/autoreply', label: 'Auto-reply', icon: Bot },
+  { to: '/dashboard/drafts',      label: 'Drafts',      icon: FileEdit },
+  { to: '/dashboard/approval',    label: 'Approval',    icon: ClipboardCheck },
+  { to: '/dashboard/templates',   label: 'Templates',   icon: Layers },
+  { to: '/dashboard/autoreply',   label: 'Auto-reply',  icon: Bot },
+  { to: '/dashboard/ai-posts',    label: 'AI Post',     icon: WandSparkles },
 ]
 
 const NAV_BOTTOM = [

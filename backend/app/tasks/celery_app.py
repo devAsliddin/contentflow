@@ -11,6 +11,11 @@ celery_app = Celery(
     include=[
         "app.tasks.post_tasks", "app.tasks.ai_tasks", "app.tasks.beat_tasks",
         "app.tasks.instagram_autoreply",
+        "app.tasks.analysis_tasks",
+        # V6 additions
+        "app.tasks.image_tasks",
+        "app.tasks.facebook_autoreply",
+        "app.tasks.ai_reply",
     ],
 )
 
@@ -30,6 +35,10 @@ celery_app.conf.update(
         "visibility_timeout": 3600,  # 1 hour
         "max_retries": 5,
     },
+    # V6: route image generation tasks to the dedicated 'images' queue
+    task_routes={
+        "contentflow.generate_image_task": {"queue": "images"},
+    },
     # Celery beat: recover missed scheduled posts every minute
     beat_schedule={
         "recover-missed-posts": {
@@ -45,6 +54,28 @@ celery_app.conf.update(
         "refresh-instagram-tokens": {
             "task": "contentflow.refresh_instagram_tokens",
             "schedule": crontab(hour=3, minute=0),
+        },
+        # V5: daily account metrics snapshot at 03:30 UTC (after token refresh at 03:00)
+        "daily-account-snapshot": {
+            "task": "contentflow.daily_account_snapshot",
+            "schedule": crontab(hour=3, minute=30),
+            "options": {"queue": "analysis"},
+        },
+        # V5: weekly full re-analysis every Monday at 04:00 UTC
+        "weekly-analysis-refresh": {
+            "task": "contentflow.weekly_refresh",
+            "schedule": crontab(hour=4, minute=0, day_of_week="monday"),
+            "options": {"queue": "analysis"},
+        },
+        # V6: FB Page token health check daily at 03:45 UTC (between IG refresh 03:00 and snapshot 03:30... actually after both)
+        "fb-token-health-check": {
+            "task": "contentflow.fb_token_health_check",
+            "schedule": crontab(hour=3, minute=45),
+        },
+        # V6: clean up old discarded image jobs + files daily at 04:30 UTC
+        "cleanup-old-image-jobs": {
+            "task": "contentflow.cleanup_old_image_jobs",
+            "schedule": crontab(hour=4, minute=30),
         },
     },
 )

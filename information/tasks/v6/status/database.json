@@ -1,0 +1,1 @@
+{ "agent": "database", "version": "v6", "status": "done", "tasks_done": ["accounts_fb_columns", "accounts_token_status", "autoreply_rules_platform_reply_mode_ai_context", "autoreply_logs_platform_reply_mode", "ai_posts_model", "migration_009", "models_init_export"], "blockers": [], "updated_at": "2026-06-11T16:55:00Z" }

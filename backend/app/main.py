@@ -16,6 +16,8 @@ from app.database import engine, Base
 from app.routers import auth, posts, accounts, ai_plan, scheduler, analytics, upload, admin
 from app.routers import oauth, ai_v2, analytics_v2, ai_v2_ext, workflows, ai_chat, ai_agent
 from app.routers import instagram_connect, instagram_webhook, autoreply
+from app.routers import analysis as analysis_v5
+from app.routers import facebook_connect, facebook_webhook, ai_posts
 
 settings = get_settings()
 limiter = Limiter(key_func=get_remote_address)
@@ -125,6 +127,14 @@ app.include_router(ai_agent.router,      prefix="/api/v2/ai",         tags=["ai-
 app.include_router(instagram_connect.router, prefix="/api/accounts/instagram", tags=["instagram-connect"])
 app.include_router(instagram_webhook.router, prefix="/api/webhooks",           tags=["instagram-webhook"])
 app.include_router(autoreply.router,         prefix="/api",                    tags=["autoreply-v4"])
+
+# V5 — AI Analyst
+app.include_router(analysis_v5.router, prefix="/api/accounts", tags=["analysis-v5"])
+
+# V6 — Facebook OAuth + webhook + AI Post Creator
+app.include_router(facebook_connect.router, prefix="/api/accounts/facebook", tags=["facebook-connect"])
+app.include_router(facebook_webhook.router, prefix="/api/webhooks",           tags=["facebook-webhook"])
+app.include_router(ai_posts.router,         prefix="/api/ai-posts",           tags=["ai-posts-v6"])
 
 # V2-INFRA-002: analytics cache invalidation on post create is triggered inside workflows router
 

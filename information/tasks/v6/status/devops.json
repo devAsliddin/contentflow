@@ -1,0 +1,14 @@
+{
+  "agent": "devops",
+  "version": "v6",
+  "status": "done",
+  "tasks_done": [
+    "env_checklist_and_cloudflare_guide",
+    "celery_images_service",
+    "nginx_facebook_webhook",
+    "media_ai_generated_nginx_and_disk_monitor",
+    "meta_app_guide"
+  ],
+  "blockers": [],
+  "updated_at": "2026-06-11T18:00:00Z"
+}

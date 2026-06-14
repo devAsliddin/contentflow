@@ -1,0 +1,24 @@
+{
+  "agent": "frontend",
+  "version": "v6",
+  "status": "done",
+  "tasks_done": [
+    "src/types/facebook.types.ts — Facebook OAuth va sahifa tiplari",
+    "src/types/ai-posts.types.ts — AI Post draft/list/job/response tiplari",
+    "src/services/facebook.service.ts — oauthStartUrl, getPages, selectPage",
+    "src/services/ai-posts.service.ts — 8 endpoint",
+    "src/types/account.types.ts — fb_ va token_status maydonlari qo'shildi",
+    "src/types/autoreply.types.ts — platform, reply_mode, ai_context maydonlari",
+    "AccountsPage.tsx — Facebook section: connect button, Page Picker Dialog, FB card, fb_error/connected query param handling",
+    "RuleEditorDialog.tsx — reply_mode switch (Tayyor matn|AI javob), ai_context textarea, ogohlantirish banneri; pre-existing curly quote bug tuzatildi",
+    "AutoReplyRulesPage.tsx — platform tab IG|FB filter",
+    "AutoReplyLogsPanel.tsx — platform + reply_mode badge",
+    "AIPostCreatorPage.tsx — 3 qadam wizard (G'oya → Matn → Rasm)",
+    "AIPostsListPage.tsx — AI post ro'yxat, thumbnail polling, Davom/O'chirish",
+    "App.tsx — /dashboard/ai-posts va /dashboard/ai-posts/create route",
+    "Sidebar.tsx — AI Post navigatsiya havolasi (WandSparkles ikonkasi)"
+  ],
+  "blockers": [],
+  "notes": "Pre-existing curly single-quote bug in RuleEditorDialog.tsx (line 29) tuzatildi. Send-to-composer redirect: /dashboard/drafts?post_id={id}. TSC noEmit: 0 xato.",
+  "updated_at": "2026-06-11T00:00:00Z"
+}

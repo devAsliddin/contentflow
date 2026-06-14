@@ -1,0 +1,13 @@
+{
+  "agent": "devops",
+  "version": "v5",
+  "status": "done",
+  "tasks_done": [
+    "deploy_doc_v5_section",
+    "celery_analysis_service",
+    "check_vllm_sh",
+    "smoke_ai_fallback_sh"
+  ],
+  "blockers": [],
+  "updated_at": "2026-06-10T14:30:00Z"
+}

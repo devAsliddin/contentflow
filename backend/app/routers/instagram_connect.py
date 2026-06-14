@@ -30,7 +30,9 @@ INSTAGRAM_AUTH_URL = "https://www.instagram.com/oauth/authorize"
 SCOPE = (
     "instagram_business_basic,"
     "instagram_business_manage_messages,"
-    "instagram_business_manage_comments"
+    "instagram_business_manage_comments,"
+    "instagram_business_manage_insights,"
+    "instagram_business_content_publish"
 )
 
 
@@ -54,7 +56,7 @@ async def instagram_oauth_start(
     """
     import uuid as _uuid
 
-    if not settings.meta_app_id_resolved:
+    if not settings.instagram_login_app_id:
         raise HTTPException(status_code=500, detail="Instagram (Meta) app not configured")
 
     payload = decode_token(token)
@@ -71,7 +73,7 @@ async def instagram_oauth_start(
 
     auth_url = (
         f"{INSTAGRAM_AUTH_URL}"
-        f"?client_id={settings.meta_app_id_resolved}"
+        f"?client_id={settings.instagram_login_app_id}"
         f"&redirect_uri={_redirect_uri()}"
         f"&response_type=code"
         f"&scope={SCOPE}"
@@ -166,6 +168,26 @@ async def instagram_oauth_callback(
         "Instagram (auto-reply) connected: user=%s ig=%s webhook=%s",
         user_id, username, subscribed,
     )
+
+    # V5 — fire-and-forget initial analysis (must not delay or break the callback)
+    try:
+        from app.models.analysis import AnalysisJob  # noqa: PLC0415
+        analysis_job = AnalysisJob(
+            account_id=account.id,
+            job_type="initial_analysis",
+            status="queued",
+            progress_pct=0,
+        )
+        db.add(analysis_job)
+        await db.flush()
+        try:
+            from app.tasks.analysis_tasks import run_initial_analysis  # type: ignore[import]  # noqa: PLC0415
+            run_initial_analysis.delay(str(account.id), str(analysis_job.id))
+            logger.info("v5: initial_analysis enqueued account_id=%s job_id=%s", account.id, analysis_job.id)
+        except Exception as celery_exc:  # noqa: BLE001
+            logger.warning("v5: could not enqueue initial_analysis: %s", celery_exc)
+    except Exception as trigger_exc:  # noqa: BLE001
+        logger.warning("v5: initial_analysis trigger failed (callback not affected): %s", trigger_exc)
 
     return RedirectResponse(
         url=f"{settings.frontend_url}/dashboard/autoreply?connected=instagram"

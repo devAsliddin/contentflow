@@ -2,14 +2,18 @@ import { useState, useRef, useEffect } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Link, Shield, Loader2 as RadarIcon, Radio, Plus, RefreshCw, Trash2, Eye, EyeOff, KeyRound, MoreHorizontal, Pencil, Check, X, Bot, Settings2 } from 'lucide-react'
+import { Link as RouterLink, useSearchParams } from 'react-router-dom'
+import { Link, Shield, Loader2 as RadarIcon, Radio, Plus, RefreshCw, Trash2, Eye, EyeOff, KeyRound, MoreHorizontal, Pencil, Check, X, Bot, Settings2, Sparkles, AlertCircle, Wifi, WifiOff, Instagram, MessagesSquare, ChevronDown, ShieldCheck } from 'lucide-react'
 import { accountsService } from '@/services/accounts.service'
+import { facebookService } from '@/services/facebook.service'
+import { autoreplyService } from '@/services/autoreply.service'
 import PlatformChip, { PLATFORM_META, type PlatformKind } from '@/components/ui/PlatformChip'
 import StatusPill from '@/components/ui/StatusPill'
 import Avatar from '@/components/ui/Avatar'
 import type { Account } from '@/types/account.types'
+import type { FacebookPage } from '@/types/facebook.types'
 
-type PlatformKey = 'tiktok' | 'instagram' | 'telegram'
+type PlatformKey = 'tiktok' | 'instagram' | 'telegram' | 'facebook'
 
 function SummaryStat({ label, value, sub, icon: Icon, tint }: { label: string; value: string; sub: string; icon: any; tint: string }) {
   return (
@@ -188,9 +192,20 @@ function SocialCard({
         </div>
       </div>
 
-      <div className="relative mt-5 pt-4 border-t border-line flex items-center justify-between">
+      <div className="relative mt-5 pt-4 border-t border-line flex items-center justify-between gap-2 flex-wrap">
         <StatusPill kind="live">connected</StatusPill>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5">
+          {!isTelegram && (
+            <RouterLink
+              to={`/dashboard/accounts/${account.id}/ai-analyst`}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition"
+              style={{ background: '#E1306C1A', color: '#E1306C', boxShadow: 'inset 0 0 0 1px #E1306C33' }}
+              title="AI Tahlil"
+            >
+              <Sparkles size={11} />
+              AI Tahlil
+            </RouterLink>
+          )}
           <button onClick={onVerify} className="p-1.5 rounded-md text-faint hover:text-ink hover:bg-surface2" title="Tekshirish">
             <RefreshCw size={13} />
           </button>
@@ -203,7 +218,86 @@ function SocialCard({
   )
 }
 
-function InstagramConnectForm({ onSuccess }: { onSuccess: () => void }) {
+// ─── Instagram Connect Panel ──────────────────────────────────────────────────
+// Ikki xil ulash usuli:
+//   1) OAuth (TAVSIYA) — comment/DM ga avtomatik javob + AI tahlil. Parol so'ralmaydi.
+//   2) Parol bilan — faqat post qo'yish uchun (eski instagrapi usuli).
+function InstagramConnectPanel({ onSuccess }: { onSuccess: () => void }) {
+  const [redirecting, setRedirecting] = useState(false)
+  const [showPasswordForm, setShowPasswordForm] = useState(false)
+
+  function connectViaOAuth() {
+    setRedirecting(true)
+    // To'liq sahifa redirect — JWT query param orqali (Facebook OAuth bilan bir xil).
+    window.location.href = autoreplyService.instagramOAuthStartUrl()
+  }
+
+  return (
+    <div className="mt-3 space-y-3">
+      {/* ── Usul 1: OAuth (tavsiya etiladi) ── */}
+      <div className="p-4 bg-bg rounded-xl border border-indigo-500/30 space-y-3">
+        <div className="flex items-center gap-2">
+          <div
+            className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+            style={{ background: 'linear-gradient(135deg,#7a1a5a,#f0427a 60%,#ffb056)' }}
+          >
+            <Instagram size={17} className="text-white" />
+          </div>
+          <div>
+            <div className="text-sm text-ink font-medium flex items-center gap-2">
+              Instagram bilan ulash
+              <span className="text-[10px] uppercase tracking-wide text-mint-500 bg-mint-500/10 border border-mint-500/20 rounded px-1.5 py-px">
+                Tavsiya
+              </span>
+            </div>
+            <div className="text-[11px] text-faint">Comment va DM larga avtomatik javob + AI tahlil uchun</div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 text-[11px] text-mint-500 bg-mint-500/10 border border-mint-500/20 rounded-lg px-3 py-2">
+          <ShieldCheck size={12} className="shrink-0" />
+          Parol so'ralmaydi — ruxsatni Instagram'ning o'zida berasiz, faqat token saqlanadi.
+        </div>
+
+        <div className="flex items-start gap-2 text-[12px] text-mute leading-relaxed">
+          <MessagesSquare size={13} className="shrink-0 mt-0.5 text-indigo-400" />
+          <span>
+            Bu usul uchun akkaunt <span className="text-ink">Professional</span> (Business yoki Creator) bo'lishi
+            va bitta <span className="text-ink">Facebook sahifasiga</span> ulangan bo'lishi kerak. Ulagandan so'ng
+            commentlarga avtomatik javob qoidalarini sozlay olasiz.
+          </span>
+        </div>
+
+        <button
+          onClick={connectViaOAuth}
+          disabled={redirecting}
+          className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-white transition disabled:opacity-50"
+          style={{ background: 'linear-gradient(135deg,#7a1a5a,#f0427a 60%,#ffb056)' }}
+        >
+          {redirecting ? <RadarIcon size={14} className="animate-spin" /> : <Instagram size={14} />}
+          {redirecting ? 'Yo\'naltirilmoqda…' : 'Instagram bilan ulash'}
+        </button>
+      </div>
+
+      {/* ── Usul 2: parol bilan (faqat post uchun) ── */}
+      <div className="rounded-xl border border-line bg-bg overflow-hidden">
+        <button
+          onClick={() => setShowPasswordForm((v) => !v)}
+          className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-surface2/40 transition"
+        >
+          <div>
+            <div className="text-sm text-ink">Foydalanuvchi nomi va parol bilan ulash</div>
+            <div className="text-[11px] text-faint">Faqat post qo'yish uchun — comment javobini ishlatmaydi</div>
+          </div>
+          <ChevronDown size={16} className={`text-faint transition ${showPasswordForm ? 'rotate-180' : ''}`} />
+        </button>
+        {showPasswordForm && <InstagramPasswordForm onSuccess={onSuccess} />}
+      </div>
+    </div>
+  )
+}
+
+function InstagramPasswordForm({ onSuccess }: { onSuccess: () => void }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [verificationCode, setVerificationCode] = useState('')
@@ -216,7 +310,7 @@ function InstagramConnectForm({ onSuccess }: { onSuccess: () => void }) {
       password,
       verification_code: needs2fa ? (verificationCode.trim() || undefined) : undefined,
     }),
-    onSuccess: () => { toast.success('Instagram account connected'); onSuccess() },
+    onSuccess: () => { toast.success('Instagram akkaunti ulandi'); onSuccess() },
     onError: (err: any) => {
       const detail = err?.response?.data?.detail
       // 2FA only asked when Instagram actually requires it.
@@ -232,11 +326,11 @@ function InstagramConnectForm({ onSuccess }: { onSuccess: () => void }) {
   return (
     <form
       onSubmit={(e) => { e.preventDefault(); mutation.mutate() }}
-      className="space-y-3 mt-3 p-4 bg-bg rounded-xl border border-line"
+      className="space-y-3 px-4 pb-4 pt-1 border-t border-line"
     >
       <div className="flex items-center gap-2 text-[11px] text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
         <Shield size={12} className="shrink-0" />
-        Your password is never stored — only a session token is saved.
+        Parolingiz saqlanmaydi — faqat sessiya tokeni saqlanadi.
       </div>
       <div>
         <label className="text-[10px] uppercase tracking-[0.14em] text-faint">Instagram username</label>
@@ -293,7 +387,7 @@ function InstagramConnectForm({ onSuccess }: { onSuccess: () => void }) {
         className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-indigo-500 text-white hover:bg-indigo-400 transition disabled:opacity-50"
       >
         {mutation.isPending ? <RadarIcon size={14} className="animate-spin" /> : <KeyRound size={14} />}
-        {mutation.isPending ? 'Logging in…' : needs2fa ? 'Submit 2FA code' : 'Connect Instagram'}
+        {mutation.isPending ? 'Kirilmoqda…' : needs2fa ? '2FA kodni yuborish' : 'Instagram ulash'}
       </button>
     </form>
   )
@@ -771,6 +865,267 @@ function TelegramBotSettingsModal({
   )
 }
 
+// ─── Facebook Connect Button ──────────────────────────────────────────────────
+
+function FacebookConnectButton({ compact = false }: { compact?: boolean }) {
+  const [loading, setLoading] = useState(false)
+
+  function handleConnect() {
+    setLoading(true)
+    // Full-page redirect — JWT via query param (same as IG OAuth pattern)
+    window.location.href = facebookService.oauthStartUrl()
+  }
+
+  if (compact) {
+    return (
+      <button
+        onClick={handleConnect}
+        disabled={loading}
+        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium text-white transition disabled:opacity-50"
+        style={{ background: '#1877F2' }}
+      >
+        {loading ? <RadarIcon size={13} className="animate-spin" /> : (
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+          </svg>
+        )}
+        {loading ? 'Yo\'naltirilmoqda…' : 'Facebook ulash'}
+      </button>
+    )
+  }
+
+  return (
+    <div className="mt-3 p-4 bg-bg rounded-xl border border-line space-y-3">
+      <div className="flex items-center gap-2 text-[11px] bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2" style={{ color: '#1877F2' }}>
+        <Shield size={12} className="shrink-0" />
+        Facebook rasmiy OAuth orqali ulanadi — parolingiz saqlanmaydi.
+      </div>
+      <p className="text-[13px] text-mute">
+        Facebook sahifangizni ulash uchun quyidagi tugmani bosing. Facebook sahifasiga yo'naltirilasiz va ruxsat bergandan so'ng avtomatik qaytasiz.
+      </p>
+      <button
+        onClick={handleConnect}
+        disabled={loading}
+        className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-white transition disabled:opacity-50"
+        style={{ background: '#1877F2' }}
+      >
+        {loading ? <RadarIcon size={14} className="animate-spin" /> : (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+          </svg>
+        )}
+        {loading ? 'Yo\'naltirilmoqda…' : 'Facebook bilan ulash'}
+      </button>
+    </div>
+  )
+}
+
+// ─── Facebook Page Picker Dialog ──────────────────────────────────────────────
+
+function FacebookPagePickerDialog({
+  sessionKey,
+  onClose,
+  onSuccess,
+}: {
+  sessionKey: string
+  onClose: () => void
+  onSuccess: () => void
+}) {
+  const qc = useQueryClient()
+  const [selectedPageId, setSelectedPageId] = useState<string>('')
+
+  const pagesQuery = useQuery({
+    queryKey: ['fb-pages-session', sessionKey],
+    queryFn: () => facebookService.getPages(sessionKey),
+    retry: false,
+  })
+
+  const selectMutation = useMutation({
+    mutationFn: () => facebookService.selectPage(sessionKey, selectedPageId),
+    onSuccess: (data) => {
+      toast.success(`Facebook Page ulandi: ${data.page_name}`)
+      qc.invalidateQueries({ queryKey: ['accounts'] })
+      onSuccess()
+    },
+    onError: (err: unknown) => {
+      const e = err as { response?: { data?: { detail?: string } } }
+      toast.error(e?.response?.data?.detail || 'Sahifani ulashda xato')
+    },
+  })
+
+  const pages: FacebookPage[] = pagesQuery.data?.pages ?? []
+
+  return (
+    <Dialog.Root open onOpenChange={(o) => { if (!o) onClose() }}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm" />
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-[min(92vw,480px)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-line bg-surface p-5 shadow-card focus:outline-none">
+          <div className="mb-4 flex items-start justify-between gap-4 border-b border-line pb-4">
+            <div className="flex items-start gap-3">
+              <PlatformChip kind="facebook" size={40} ring />
+              <div>
+                <Dialog.Title className="font-display text-xl text-ink tracking-tight">
+                  Facebook sahifani tanlang
+                </Dialog.Title>
+                <Dialog.Description className="mt-1 text-sm text-mute">
+                  Ulashni xohlagan sahifani tanlang.
+                </Dialog.Description>
+              </div>
+            </div>
+            <Dialog.Close className="shrink-0 rounded-lg p-2 text-faint transition hover:bg-surface2 hover:text-ink" aria-label="Yopish">
+              <X size={16} />
+            </Dialog.Close>
+          </div>
+
+          {pagesQuery.isLoading ? (
+            <div className="flex items-center gap-2 text-mute text-sm py-8 justify-center">
+              <RadarIcon size={16} className="animate-spin" /> Sahifalar yuklanmoqda…
+            </div>
+          ) : pagesQuery.isError ? (
+            <div className="flex items-center gap-2 text-rose-400 text-sm py-4 bg-rose-500/10 rounded-xl px-4 border border-rose-500/20">
+              <AlertCircle size={15} className="shrink-0" />
+              Sahifalar ro'yxatini yuklab bo'lmadi. Sessiya muddati o'tgan bo'lishi mumkin.
+            </div>
+          ) : pages.length === 0 ? (
+            <div className="text-center py-6 text-mute text-sm">Sahifalar topilmadi.</div>
+          ) : (
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {pages.map((page) => {
+                const picUrl = page.picture?.data?.url
+                return (
+                  <button
+                    key={page.id}
+                    onClick={() => setSelectedPageId(page.id)}
+                    className={`w-full flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition ${
+                      selectedPageId === page.id
+                        ? 'border-blue-500/60 bg-blue-500/10'
+                        : 'border-line hover:border-line2 hover:bg-surface2'
+                    }`}
+                  >
+                    {picUrl ? (
+                      <img src={picUrl} alt={page.name} className="w-9 h-9 rounded-lg object-cover shrink-0" />
+                    ) : (
+                      <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: '#1877F21A', color: '#1877F2' }}>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                        </svg>
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm text-ink truncate">{page.name}</div>
+                      <div className="text-[11px] text-faint">{page.id}</div>
+                    </div>
+                    {selectedPageId === page.id && (
+                      <Check size={15} className="shrink-0" style={{ color: '#1877F2' }} />
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 mt-4">
+            <Dialog.Close asChild>
+              <button className="px-4 py-2 rounded-lg text-sm text-mute hover:text-ink transition">
+                Bekor qilish
+              </button>
+            </Dialog.Close>
+            <button
+              disabled={!selectedPageId || selectMutation.isPending}
+              onClick={() => selectMutation.mutate()}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white transition disabled:opacity-50"
+              style={{ background: '#1877F2' }}
+            >
+              {selectMutation.isPending && <RadarIcon size={13} className="animate-spin" />}
+              Sahifani ulash
+            </button>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  )
+}
+
+// ─── Facebook Account Card ────────────────────────────────────────────────────
+
+function FacebookCard({
+  account,
+  onDisconnect,
+  onReconnect,
+}: {
+  account: Account
+  onDisconnect: () => void
+  onReconnect: () => void
+}) {
+  const isExpired = account.token_status === 'expired'
+  const webhookOk = account.fb_webhook_subscribed === true
+
+  return (
+    <div
+      className="lift relative rounded-2xl bg-surface border border-line p-5 overflow-hidden"
+      style={{ boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.02), 0 0 36px -20px rgba(24,119,242,0.45)' }}
+    >
+      <div className="absolute -right-10 -top-10 w-32 h-32 rounded-full blur-3xl opacity-40" style={{ background: 'rgba(24,119,242,0.5)' }} />
+
+      <div className="relative flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <PlatformChip kind="facebook" size={40} ring />
+          <div className="min-w-0">
+            <div className="text-[15px] text-ink leading-tight truncate">
+              {account.fb_page_name || account.account_name}
+            </div>
+            <div className="text-[12px] text-mute mt-0.5">Facebook Page</div>
+          </div>
+        </div>
+        {isExpired && (
+          <span className="shrink-0 text-[10px] uppercase tracking-wide text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded px-1.5 py-0.5">
+            Token muddati tugagan
+          </span>
+        )}
+      </div>
+
+      <div className="relative mt-4 pt-4 border-t border-line space-y-2">
+        {/* Webhook status */}
+        <div className="flex items-center gap-1.5 text-[12px]">
+          {webhookOk ? (
+            <Wifi size={12} className="text-mint-500" />
+          ) : (
+            <WifiOff size={12} className="text-amber-400" />
+          )}
+          <span className={webhookOk ? 'text-mint-500' : 'text-amber-400'}>
+            {webhookOk ? 'Webhook faol' : 'Webhook ulanmagan'}
+          </span>
+        </div>
+
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          {isExpired ? (
+            <StatusPill kind="failed">Token muddati tugagan</StatusPill>
+          ) : (
+            <StatusPill kind="live">Ulangan</StatusPill>
+          )}
+
+          <div className="flex items-center gap-1.5">
+            {isExpired && (
+              <button
+                onClick={onReconnect}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-white transition"
+                style={{ background: '#1877F2' }}
+                title="Qayta ulash"
+              >
+                <RefreshCw size={11} />
+                Qayta ulash
+              </button>
+            )}
+            <button onClick={onDisconnect} className="p-1.5 rounded-md text-faint hover:text-rose-500 hover:bg-rose-500/10" title="Uzish">
+              <Trash2 size={13} />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function TikTokConnectForm({ onSuccess }: { onSuccess: () => void }) {
   const [loading, setLoading] = useState(false)
 
@@ -814,6 +1169,27 @@ export default function AccountsPage() {
   const queryClient = useQueryClient()
   const [showForm, setShowForm] = useState<PlatformKey | null>(null)
   const [telegramSettingsAccount, setTelegramSettingsAccount] = useState<Account | null>(null)
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  // Handle Facebook OAuth return params
+  const fbSelectPage = searchParams.get('fb_select_page')
+  const fbConnected = searchParams.get('connected')
+  const fbError = searchParams.get('fb_error')
+
+  useEffect(() => {
+    if (fbConnected === 'facebook') {
+      toast.success('Facebook Page muvaffaqiyatli ulandi!')
+      searchParams.delete('connected')
+      setSearchParams(searchParams, { replace: true })
+      queryClient.invalidateQueries({ queryKey: ['accounts'] })
+    }
+    if (fbError === 'no_pages') {
+      toast.error('Facebook akkauntingizda boshqaruvchi sahifa topilmadi.')
+      searchParams.delete('fb_error')
+      setSearchParams(searchParams, { replace: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const { data: accounts = [], isLoading } = useQuery({
     queryKey: ['accounts'],
@@ -845,11 +1221,92 @@ export default function AccountsPage() {
     <div className="page-in px-8 py-6 space-y-8 max-w-[1280px]">
       {/* Summary stats */}
       <div className="grid grid-cols-4 gap-4">
-        <SummaryStat label="Connected"  value={String(totalAccounts)} sub="of 9 max"            icon={Link}    tint="#6C63FF" />
-        <SummaryStat label="Healthy"    value={String(totalAccounts)} sub="all tokens valid"     icon={Shield}  tint="#00F5A0" />
-        <SummaryStat label="Platforms"  value="3"                     sub="Instagram·TikTok·TG"  icon={Radio}   tint="#FFB347" />
-        <SummaryStat label="Accounts"   value={String(totalAccounts)} sub="across all platforms" icon={RadarIcon} tint="#5BE8FF" />
+        <SummaryStat label="Ulangan"   value={String(totalAccounts)} sub="jami"                  icon={Link}    tint="#6C63FF" />
+        <SummaryStat label="Faol"      value={String(totalAccounts)} sub="tokenlar yaroqli"       icon={Shield}  tint="#00F5A0" />
+        <SummaryStat label="Platforma" value="4"                     sub="IG·TikTok·TG·FB"        icon={Radio}   tint="#FFB347" />
+        <SummaryStat label="Akkaunt"   value={String(totalAccounts)} sub="barcha platformalar"    icon={RadarIcon} tint="#5BE8FF" />
       </div>
+
+      {/* Facebook Page Picker dialog (triggered by ?fb_select_page= query param) */}
+      {fbSelectPage && (
+        <FacebookPagePickerDialog
+          sessionKey={fbSelectPage}
+          onClose={() => {
+            searchParams.delete('fb_select_page')
+            setSearchParams(searchParams, { replace: true })
+          }}
+          onSuccess={() => {
+            searchParams.delete('fb_select_page')
+            setSearchParams(searchParams, { replace: true })
+            queryClient.invalidateQueries({ queryKey: ['accounts'] })
+          }}
+        />
+      )}
+
+      {/* Facebook section */}
+      {(() => {
+        const platform: PlatformKey = 'facebook'
+        const p = PLATFORM_META[platform]
+        const platformAccounts = accounts.filter((a) => a.platform === platform)
+        const maxSlots = 3
+        const canAdd = platformAccounts.length < maxSlots
+
+        return (
+          <section key={platform}>
+            <div className="flex items-start justify-between mb-5">
+              <div className="flex items-start gap-3">
+                <PlatformChip kind="facebook" size={36} ring />
+                <div>
+                  <div className="flex items-center gap-3">
+                    <h2 className="font-display text-2xl text-ink tracking-tight">{p.label}</h2>
+                    <span className="text-[10px] uppercase tracking-[0.16em] text-faint border border-line rounded px-2 py-0.5 tnum">
+                      {platformAccounts.length} / {maxSlots}
+                    </span>
+                  </div>
+                  <p className="text-sm text-mute mt-1 max-w-xl">
+                    Facebook sahifangizni ulang. Commentlarga avtomatik javob berish imkoni ochiladi.
+                  </p>
+                </div>
+              </div>
+              {canAdd && (
+                <button
+                  onClick={() => openConnectForm(platform)}
+                  className="inline-flex items-center gap-2 px-3.5 py-2 text-sm rounded-lg font-medium text-white transition"
+                  style={{ background: '#1877F2' }}
+                >
+                  <Plus size={14} />
+                  Facebook ulash
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              {platformAccounts.map((account) => (
+                <FacebookCard
+                  key={account.id}
+                  account={account}
+                  onDisconnect={() => disconnectMutation.mutate(account.id)}
+                  onReconnect={() => {
+                    window.location.href = facebookService.oauthStartUrl()
+                  }}
+                />
+              ))}
+              {canAdd && showForm !== 'facebook' && (
+                <AddCard
+                  kind="facebook"
+                  label="+ Facebook ulash"
+                  hint={`${platformAccounts.length}/${maxSlots} · OAuth`}
+                  onClick={() => openConnectForm('facebook')}
+                />
+              )}
+            </div>
+
+            {showForm === 'facebook' && (
+              <FacebookConnectButton />
+            )}
+          </section>
+        )
+      })()}
 
       {(['telegram', 'instagram', 'tiktok'] as PlatformKey[]).map((platform) => {
         const p = PLATFORM_META[platform]
@@ -872,8 +1329,8 @@ export default function AccountsPage() {
                   </div>
                   <p className="text-sm text-mute mt-1 max-w-xl">
                     {platform === 'telegram' && `Har bir kanal uchun bot ulang. Bir botga ${MAX_TG_CHANNELS} tagacha kanal qo'shish mumkin.`}
-                    {platform === 'instagram' && 'Up to 3 accounts. Connect with your username & password — session token stored encrypted, password never saved.'}
-                    {platform === 'tiktok' && "Up to 3 accounts. Tokens refresh automatically every 23 days — we'll notify you ahead of time."}
+                    {platform === 'instagram' && "3 tagacha akkaunt. Commentlarga avtomatik javob uchun “Instagram bilan ulash” (OAuth) ni tanlang — parol so'ralmaydi. Faqat post qo'yish uchun parol bilan ham ulash mumkin."}
+                    {platform === 'tiktok' && "3 tagacha akkaunt. Tokenlar har 23 kunda avtomatik yangilanadi — oldindan ogohlantiramiz."}
                   </p>
                 </div>
               </div>
@@ -907,7 +1364,7 @@ export default function AccountsPage() {
                     platform === 'telegram'
                       ? `${platformAccounts.length}/${maxSlots} · @BotFather token`
                       : platform === 'instagram'
-                      ? 'Enter your Instagram username & password'
+                      ? 'OAuth (comment javob) yoki parol bilan'
                       : `TikTok OAuth · ~30 soniya`
                   }
                   onClick={() => openConnectForm(platform)}
@@ -917,7 +1374,7 @@ export default function AccountsPage() {
 
             {showForm === platform && (
               platform === 'instagram'
-                ? <InstagramConnectForm
+                ? <InstagramConnectPanel
                     onSuccess={() => {
                       setShowForm(null)
                       queryClient.invalidateQueries({ queryKey: ['accounts'] })
