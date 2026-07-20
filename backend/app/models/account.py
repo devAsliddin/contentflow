@@ -22,6 +22,22 @@ class Account(Base):
     # V2-ACC-003: OAuth2 migration tracking
     oauth_migrated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="false")
     oauth_migrated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # V4: Instagram professional account ID — used for webhook routing and loop protection.
+    ig_user_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    ig_webhook_subscribed: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="false"
+    )
+    # V6: Facebook Page integration
+    fb_user_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    fb_page_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    fb_page_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    fb_webhook_subscribed: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="false"
+    )
+    # token health-check: active | expired
+    token_status: Mapped[str] = mapped_column(
+        String(16), default="active", nullable=False, server_default="active"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )

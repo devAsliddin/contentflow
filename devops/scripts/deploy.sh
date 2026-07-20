@@ -26,10 +26,12 @@ fail() {
 }
 
 restart_services() {
-  sudo systemctl restart contentflow-backend    || true
-  sudo systemctl restart contentflow-celery     || true
-  sudo systemctl restart contentflow-celery-beat || true
-  sudo systemctl reload  nginx                  || true
+  sudo systemctl restart contentflow-backend           || true
+  sudo systemctl restart contentflow-celery            || true
+  sudo systemctl restart contentflow-celery-analysis   || true
+  sudo systemctl restart contentflow-celery-images     || true
+  sudo systemctl restart contentflow-celery-beat       || true
+  sudo systemctl reload  nginx                         || true
 }
 
 log "==> Starting ContentFlow deployment"
@@ -74,10 +76,14 @@ chmod 750 "$APP_DIR/media"
 
 # ──── Install systemd services ───────────────────────────────────────
 log "==> Installing systemd service files..."
-sudo cp devops/systemd/contentflow-backend.service    /etc/systemd/system/
-sudo cp devops/systemd/contentflow-celery.service     /etc/systemd/system/
-sudo cp devops/systemd/contentflow-celery-beat.service /etc/systemd/system/
+sudo cp devops/systemd/contentflow-backend.service          /etc/systemd/system/
+sudo cp devops/systemd/contentflow-celery.service           /etc/systemd/system/
+sudo cp devops/systemd/contentflow-celery-analysis.service  /etc/systemd/system/
+sudo cp devops/systemd/contentflow-celery-images.service    /etc/systemd/system/
+sudo cp devops/systemd/contentflow-celery-beat.service      /etc/systemd/system/
 sudo systemctl daemon-reload
+sudo systemctl enable contentflow-celery-analysis || true
+sudo systemctl enable contentflow-celery-images   || true
 
 # ──── Restart services ───────────────────────────────────────────────
 log "==> Restarting services..."

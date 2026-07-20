@@ -24,7 +24,7 @@ export default function TelegramPreview({ mediaUrl, mediaType, caption, account 
       <div className="px-2.5 py-2">
         <div className="rounded-xl overflow-hidden" style={{ background: '#1e2d3b' }}>
           {mediaUrl && (
-            <MediaFrame mediaUrl={mediaUrl} mediaType={mediaType} aspectRatio="4 / 3" bgColor="#0e1621" />
+            <MediaFrame mediaUrl={mediaUrl} mediaType={mediaType} aspectRatio="auto" bgColor="#0e1621" />
           )}
           <div className="px-3 py-2.5">
             <div className="text-white text-[13px] leading-snug">

@@ -87,7 +87,7 @@ export default function RecycleModal({ post, onClose }: Props) {
       workflowsService.recyclePost(post.id, {
         scheduled_at: new Date(scheduledAt).toISOString(),
       }),
-    onSuccess: (newPost) => {
+    onSuccess: (_newPost) => {
       toast.success('Post qayta rejalashtiriildi')
       queryClient.invalidateQueries({ queryKey: ['posts'] })
       onClose()

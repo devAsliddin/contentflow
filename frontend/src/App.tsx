@@ -13,9 +13,16 @@ import AdminPage from '@/pages/AdminPage'
 import LoginPage from '@/pages/LoginPage'
 import RegisterPage from '@/pages/RegisterPage'
 import DraftsPage from '@/pages/DraftsPage'
-import PreviewScreen from '@/components/preview/PreviewScreen'
 import ApprovalPage from '@/pages/ApprovalPage'
 import TemplatesPage from '@/pages/TemplatesPage'
+import AutoReplyRulesPage from '@/components/autoreply/AutoReplyRulesPage'
+import PrivacyPage from '@/pages/PrivacyPage'
+import TermsPage from '@/pages/TermsPage'
+import DataDeletionPage from '@/pages/DataDeletionPage'
+import ContactPage from '@/pages/ContactPage'
+import AIAnalystPage from '@/pages/AIAnalystPage'
+import AIPostsListPage from '@/pages/AIPostsListPage'
+import AIPostCreatorPage from '@/pages/AIPostCreatorPage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
@@ -38,6 +45,10 @@ export default function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/terms" element={<TermsPage />} />
+        <Route path="/data-deletion" element={<DataDeletionPage />} />
+        <Route path="/contact" element={<ContactPage />} />
 
         {/* Protected app routes */}
         <Route
@@ -50,7 +61,6 @@ export default function App() {
         >
           <Route index element={<DashboardPage />} />
           <Route path="new-post" element={<NewPostPage />} />
-          <Route path="preview" element={<PreviewScreen />} />
           <Route path="accounts" element={<AccountsPage />} />
           <Route path="calendar" element={<CalendarPage />} />
           <Route path="ai-plan" element={<Navigate to="/dashboard/ai-chat" replace />} />
@@ -60,6 +70,10 @@ export default function App() {
           <Route path="drafts" element={<DraftsPage />} />
           <Route path="approval" element={<ApprovalPage />} />
           <Route path="templates" element={<TemplatesPage />} />
+          <Route path="autoreply" element={<AutoReplyRulesPage />} />
+          <Route path="accounts/:id/ai-analyst" element={<AIAnalystPage />} />
+          <Route path="ai-posts" element={<AIPostsListPage />} />
+          <Route path="ai-posts/create" element={<AIPostCreatorPage />} />
           <Route
             path="admin"
             element={

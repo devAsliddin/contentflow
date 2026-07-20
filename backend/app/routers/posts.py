@@ -1,3 +1,5 @@
+import asyncio
+import logging
 import uuid
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, status, Query
@@ -20,6 +22,30 @@ from app.middleware.auth_middleware import get_current_user
 
 router = APIRouter()
 settings = get_settings()
+logger = logging.getLogger(__name__)
+
+# Keep strong refs to detached enqueue tasks so they aren't GC'd mid-flight.
+_enqueue_tasks: set = set()
+
+
+async def _enqueue_scheduled_post(post_id: str, eta) -> None:
+    """Best-effort enqueue of a scheduled post, detached from the request.
+
+    apply_async() is blocking I/O against the Redis broker; if the broker is
+    slow or down it can stall for ~20s. Running this detached means post
+    creation returns immediately. The post is already persisted as "scheduled",
+    and the beat task `recover_missed_posts` re-queues it once due, so a failed
+    enqueue here never loses the post.
+    """
+    try:
+        from app.tasks.post_tasks import schedule_post
+        await asyncio.to_thread(schedule_post.apply_async, args=[post_id], eta=eta)
+    except Exception:
+        logger.warning(
+            "Background enqueue of scheduled post %s failed (broker slow/down); "
+            "beat recovery will publish it once due",
+            post_id,
+        )
 
 
 def _option_value(data: CreatePostRequest | UpdatePostRequest, platform: str, key: str) -> str | None:
@@ -139,8 +165,8 @@ async def _review_post_payload(
             elif not _media_file_exists(data.media_url):
                 target_errors.append("TikTok video fayli serverda topilmadi. Qayta upload qiling.")
             elif data.media_url.startswith("/media/") and "localhost" in settings.backend_url:
-                warnings.append("TikTok publish uchun BACKEND_URL public HTTPS domen bo'lishi kerak.")
-                notes.append("TikTok uchun public video URL kerak.")
+                warnings.append("TikTok requires a public HTTPS domain configured for publishing.")
+                notes.append("TikTok requires a public video URL.")
             if placement != "post":
                 target_errors.append("TikTok uchun hozircha faqat Post qo'llanadi.")
             if aspect_ratio not in ("9:16", "16:9"):
@@ -211,14 +237,15 @@ async def create_post(
     await db.flush()
     await db.refresh(post)
 
-    # Schedule via Celery if scheduled_at is set
+    # Schedule via Celery if scheduled_at is set. Enqueue is best-effort: the
+    # post is already persisted as "scheduled", and the beat task
+    # `recover_missed_posts` re-queues any due post that wasn't enqueued. So a
+    # broker that's down must not fail (or hang) post creation.
     if scheduled_at:
-        from app.tasks.post_tasks import schedule_post
-        task = schedule_post.apply_async(args=[str(post.id)], eta=scheduled_at)
-        post.celery_task_id = task.id
-        db.add(post)
-        await db.flush()
-        await db.refresh(post)
+        # Detached, best-effort — never blocks the response on the broker.
+        task = asyncio.create_task(_enqueue_scheduled_post(str(post.id), scheduled_at))
+        _enqueue_tasks.add(task)
+        task.add_done_callback(_enqueue_tasks.discard)
 
     # V2-INFRA-002: invalidate analytics Redis cache after post creation
     try:
@@ -306,9 +333,22 @@ async def delete_post(
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
 
-    # Cancel Celery task if scheduled
+    # Cancel Celery task if scheduled — detached/best-effort. control.revoke()
+    # is a blocking broadcast over the broker; a down/slow broker must not hang
+    # the delete. The revoked task is also a no-op if it fires, because the post
+    # row is gone (schedule_post skips missing/non-scheduled posts).
     if post.celery_task_id:
-        from app.tasks.celery_app import celery_app
-        celery_app.control.revoke(post.celery_task_id, terminate=True)
+        async def _revoke(task_id: str) -> None:
+            try:
+                from app.tasks.celery_app import celery_app
+                await asyncio.to_thread(
+                    celery_app.control.revoke, task_id, terminate=True
+                )
+            except Exception:
+                logger.warning("Could not revoke Celery task %s (broker slow/down)", task_id)
+
+        task = asyncio.create_task(_revoke(post.celery_task_id))
+        _enqueue_tasks.add(task)
+        task.add_done_callback(_enqueue_tasks.discard)
 
     await db.delete(post)

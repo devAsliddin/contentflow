@@ -58,6 +58,63 @@ async def _recover():
         await engine.dispose()
 
 
+@celery_app.task(name="contentflow.refresh_instagram_tokens")
+def refresh_instagram_tokens():
+    """V4 — refresh Instagram long-lived tokens older than 50 days (60-day expiry)."""
+    asyncio.run(_refresh_instagram_tokens())
+
+
+async def _refresh_instagram_tokens():
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+    from sqlalchemy import select
+    from app.config import get_settings
+    from app.models.account import Account
+    from app.services.encryption import encrypt_credentials, decrypt_credentials
+    from app.services import instagram_graph as ig
+
+    settings = get_settings()
+    engine = create_async_engine(settings.database_url, pool_pre_ping=True)
+    factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    now = datetime.now(timezone.utc)
+
+    try:
+        async with factory() as db:
+            result = await db.execute(
+                select(Account).where(
+                    Account.platform == "instagram",
+                    Account.ig_user_id.isnot(None),
+                    Account.is_active == True,  # noqa: E712
+                )
+            )
+            for account in result.scalars().all():
+                try:
+                    creds = decrypt_credentials(account.credentials)
+                    token = creds.get("access_token")
+                    if not token:
+                        continue
+                    issued_raw = creds.get("token_issued_at")
+                    if issued_raw:
+                        issued = datetime.fromisoformat(issued_raw)
+                        if issued.tzinfo is None:
+                            issued = issued.replace(tzinfo=timezone.utc)
+                        if (now - issued) < timedelta(days=50):
+                            continue
+                    refreshed = await ig.refresh_long_lived(token)
+                    new_token = refreshed.get("access_token")
+                    if not new_token:
+                        continue
+                    creds["access_token"] = new_token
+                    creds["token_issued_at"] = now.isoformat()
+                    account.credentials = encrypt_credentials(creds)
+                    db.add(account)
+                    logger.info("Refreshed Instagram token for account %s", account.id)
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("Token refresh failed for account %s: %s", account.id, exc)
+            await db.commit()
+    finally:
+        await engine.dispose()
+
+
 @celery_app.task(name="contentflow.weekly_analytics_summary")
 def weekly_analytics_summary():
     """V2-NOT-003 — Send weekly analytics summary via Telegram every Monday at 09:00 UTC."""

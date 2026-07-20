@@ -32,7 +32,7 @@ export default function XTwitterPreview({ mediaUrl, mediaType, caption, account 
           {/* Media */}
           {mediaUrl && (
             <div className="mt-2 rounded-xl overflow-hidden border" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
-              <MediaFrame mediaUrl={mediaUrl} mediaType={mediaType} aspectRatio="16 / 9" bgColor="#16181c" />
+              <MediaFrame mediaUrl={mediaUrl} mediaType={mediaType} aspectRatio="auto" bgColor="#16181c" />
             </div>
           )}
 

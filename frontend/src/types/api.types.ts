@@ -4,6 +4,8 @@ export interface User {
   full_name: string | null
   is_active: boolean
   is_admin: boolean
+  ai_credits: number
+  ai_credits_limit: number
   created_at: string
 }
 
@@ -64,6 +66,8 @@ export interface PlanPost {
   platform: string
   idea: string
   scheduled_time: string  // "HH:MM"
+  content_type?: string   // "image" | "video"
+  video_brief?: string    // what video to prepare when content_type === "video"
 }
 
 export interface WeeklyPlan {

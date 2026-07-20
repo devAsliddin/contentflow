@@ -30,7 +30,7 @@ export default function FacebookPreview({ mediaUrl, mediaType, caption, account 
 
       {/* Media */}
       {mediaUrl && (
-        <MediaFrame mediaUrl={mediaUrl} mediaType={mediaType} aspectRatio="4 / 3" bgColor="#f0f2f5" />
+        <MediaFrame mediaUrl={mediaUrl} mediaType={mediaType} aspectRatio="auto" bgColor="#f0f2f5" />
       )}
 
       {/* Reaction summary */}

@@ -24,6 +24,31 @@ EXT_MAP = {
     "video/quicktime": ".mov",
 }
 
+# Magic bytes signatures: list of (offset, expected_bytes)
+# All listed signatures must match for the file to be considered valid.
+_MAGIC: dict[str, list[tuple[int, bytes]]] = {
+    "image/jpeg":      [(0, b"\xff\xd8\xff")],
+    "image/png":       [(0, b"\x89PNG\r\n\x1a\n")],
+    "image/webp":      [(0, b"RIFF"), (8, b"WEBP")],
+    "video/mp4":       [(4, b"ftyp")],
+    "video/quicktime": [(4, b"ftyp")],
+}
+# Alternative box types accepted for QuickTime/MOV
+_QT_ALT_BOXES = [b"moov", b"mdat", b"wide", b"skip", b"pnot"]
+
+
+def _validate_magic(content: bytes, content_type: str) -> bool:
+    """Return True if file content matches expected magic bytes for the declared type."""
+    if len(content) < 12:
+        return False
+    checks = _MAGIC.get(content_type)
+    if not checks:
+        return False
+    valid = all(content[off:off + len(sig)] == sig for off, sig in checks)
+    if not valid and content_type == "video/quicktime":
+        valid = any(content[4:8] == box for box in _QT_ALT_BOXES)
+    return valid
+
 
 @router.post("/media")
 async def upload_media(
@@ -45,6 +70,9 @@ async def upload_media(
     if size > max_size:
         limit_mb = max_size // (1024 * 1024)
         raise HTTPException(status_code=413, detail=f"File too large. Max size: {limit_mb}MB")
+
+    if not _validate_magic(contents, content_type):
+        raise HTTPException(status_code=400, detail="File content does not match declared type")
 
     ext = EXT_MAP.get(content_type, ".bin")
     filename = f"{uuid.uuid4()}{ext}"

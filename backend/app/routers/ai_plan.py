@@ -1,5 +1,8 @@
 import os
+import logging
 from fastapi import APIRouter, Depends, HTTPException
+
+logger = logging.getLogger(__name__)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -15,6 +18,7 @@ from app.schemas.ai_plan import (
 )
 from app.middleware.auth_middleware import get_current_user
 from app.services.ai_service import AIService
+from app.services import credit_service
 
 router = APIRouter()
 
@@ -23,8 +27,10 @@ router = APIRouter()
 async def generate_plan(
     data: GeneratePlanRequest,
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """Generate a full weekly content plan for all selected platforms."""
+    await credit_service.consume(db, current_user, "plan")
     try:
         service = AIService()
         plan = await service.generate_plan(
@@ -44,8 +50,10 @@ async def generate_plan(
 async def generate_captions(
     data: GenerateCaptionsRequest,
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """Batch caption generation — one AI call for all posts in the plan."""
+    await credit_service.consume(db, current_user, "captions_batch")
     try:
         service = AIService()
         posts_input = [
@@ -66,8 +74,12 @@ async def generate_captions(
 async def generate_caption(
     data: GenerateCaptionRequest,
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """Generate a caption — uses vision AI if image is provided, text AI otherwise."""
+    await credit_service.consume(
+        db, current_user, "caption_image" if data.image_url else "caption"
+    )
     try:
         service = AIService()
 
@@ -116,6 +128,8 @@ async def suggest_ideas(
     try:
         service = AIService()
         ideas = await service.suggest_ideas(recent_posts)
+        await credit_service.consume(db, current_user, "ideas")
         return ideas
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Ideas generation failed: {str(e)}")
+        logger.warning("Ideas generation failed (AI service may be offline): %s", e)
+        return {"ideas": []}

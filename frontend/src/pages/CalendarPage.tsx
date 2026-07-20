@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay,
@@ -7,7 +7,7 @@ import {
 } from 'date-fns'
 import {
   ChevronLeft, ChevronRight, X, Filter, Plus, CalendarX, Repeat2,
-  Sparkles, Loader2, Check, RefreshCw,
+  Sparkles, Loader2, Check, RefreshCw, Trash2, Clock,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { postsService } from '@/services/posts.service'
@@ -62,7 +62,7 @@ function dayToDate(weekStart: Date, dayOffset: number): Date {
 
 // ── Day event bubble ──────────────────────────────────────────────────────────
 
-function DayEvent({ post, idx }: { post: Post; idx: number }) {
+function DayEvent({ post }: { post: Post; idx: number }) {
   const platforms = (post.platforms || []).map(getPlatformFromEntry) as PlatformKind[]
   const statusBg: Record<string, string> = {
     published: 'rgba(0,245,160,0.10)',
@@ -99,7 +99,29 @@ function DayEvent({ post, idx }: { post: Post; idx: number }) {
 
 function DayDrawer({ day, posts, onClose }: { day: Date; posts: Post[]; onClose: () => void }) {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [recyclingPost, setRecyclingPost] = useState<Post | null>(null)
+  const [editingTimeId, setEditingTimeId] = useState<string | null>(null)
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => postsService.delete(id),
+    onSuccess: () => {
+      toast.success("Post o'chirildi")
+      queryClient.invalidateQueries({ queryKey: ['posts', 'calendar'] })
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.detail || "O'chirib bo'lmadi"),
+  })
+
+  const updateTimeMutation = useMutation({
+    mutationFn: ({ id, scheduled_at }: { id: string; scheduled_at: string }) =>
+      postsService.update(id, { scheduled_at }),
+    onSuccess: () => {
+      toast.success('Vaqt yangilandi')
+      setEditingTimeId(null)
+      queryClient.invalidateQueries({ queryKey: ['posts', 'calendar'] })
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.detail || "Vaqtni o'zgartirib bo'lmadi"),
+  })
 
   return (
     <>
@@ -151,15 +173,64 @@ function DayDrawer({ day, posts, onClose }: { day: Date; posts: Post[]; onClose:
                     </div>
                   </div>
                 </div>
-                {post.status === 'published' && (
-                  <button
-                    onClick={() => setRecyclingPost(post)}
-                    className="mt-2 flex items-center gap-1.5 text-xs text-mute hover:text-indigo-400 transition"
-                  >
-                    <Repeat2 size={11} />
-                    Recycle
-                  </button>
+                {/* Inline time editor */}
+                {editingTimeId === post.id && (
+                  <div className="mt-3 flex items-center gap-2">
+                    <input
+                      type="datetime-local"
+                      defaultValue={post.scheduled_at ? format(new Date(post.scheduled_at), "yyyy-MM-dd'T'HH:mm") : ''}
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          updateTimeMutation.mutate({
+                            id: post.id,
+                            scheduled_at: new Date(e.target.value).toISOString(),
+                          })
+                        }
+                      }}
+                      className="flex-1 px-2 py-1.5 rounded-lg bg-bg border border-line text-ink text-xs focus:outline-none focus:border-indigo-500/50"
+                    />
+                    <button
+                      onClick={() => setEditingTimeId(null)}
+                      className="p-1.5 rounded text-faint hover:text-ink hover:bg-surface2"
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
                 )}
+
+                {/* Actions */}
+                <div className="mt-2.5 flex items-center gap-3">
+                  {post.status === 'published' && (
+                    <button
+                      onClick={() => setRecyclingPost(post)}
+                      className="flex items-center gap-1.5 text-xs text-mute hover:text-indigo-400 transition"
+                    >
+                      <Repeat2 size={11} />
+                      Recycle
+                    </button>
+                  )}
+                  {(post.status === 'scheduled' || post.status === 'draft') && (
+                    <button
+                      onClick={() => setEditingTimeId(editingTimeId === post.id ? null : post.id)}
+                      className="flex items-center gap-1.5 text-xs text-mute hover:text-indigo-400 transition"
+                    >
+                      <Clock size={11} />
+                      Vaqtni o'zgartirish
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      if (window.confirm("Bu postni o'chirasizmi?")) {
+                        deleteMutation.mutate(post.id)
+                      }
+                    }}
+                    disabled={deleteMutation.isPending}
+                    className="ml-auto flex items-center gap-1.5 text-xs text-mute hover:text-red-400 transition disabled:opacity-50"
+                  >
+                    <Trash2 size={11} />
+                    O'chirish
+                  </button>
+                </div>
               </div>
             )
           })}
@@ -167,7 +238,7 @@ function DayDrawer({ day, posts, onClose }: { day: Date; posts: Post[]; onClose:
 
         <div className="p-5 border-t border-line">
           <button
-            onClick={() => navigate('/new-post')}
+            onClick={() => navigate('/dashboard/new-post')}
             className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-indigo-500 text-white font-medium shadow-glow-indigo hover:bg-indigo-400 transition text-sm"
           >
             <Plus size={14} />
@@ -493,6 +564,12 @@ function AiPlanModal({ weekStart, onClose }: AiPlanModalProps) {
                               {format(postDate, 'EEE d MMM')} · {post.scheduled_time}
                             </div>
                             <div className="text-[12px] text-faint mt-0.5 italic">{post.idea}</div>
+                            {post.content_type === 'video' && post.video_brief && (
+                              <div className="mt-1.5 flex items-start gap-1.5 rounded-lg bg-fuchsia-500/10 border border-fuchsia-500/25 px-2 py-1.5">
+                                <span className="text-[10px] uppercase tracking-wide text-fuchsia-300 font-semibold shrink-0 mt-px">🎬 Video</span>
+                                <span className="text-[11px] text-fuchsia-200/90 leading-snug">{post.video_brief}</span>
+                              </div>
+                            )}
                           </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
@@ -686,9 +763,9 @@ export default function CalendarPage() {
   const aiWeekStart = getMonday(currentMonth)
 
   return (
-    <div className="page-in px-8 py-6">
+    <div className="page-in px-4 md:px-8 py-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between gap-3 flex-wrap gap-y-3 mb-6">
         <div className="flex items-center gap-4">
           <div className="flex items-center bg-surface border border-line rounded-lg overflow-hidden">
             <button
@@ -736,7 +813,7 @@ export default function CalendarPage() {
               (k) => (
                 <div key={k} className="flex items-center gap-1.5">
                   <PlatformChip kind={k} size={14} />
-                  <span className="hidden xl:inline">{PLATFORM_META[k].label}</span>
+                  <span className="hidden 2xl:inline">{PLATFORM_META[k].label}</span>
                 </div>
               ),
             )}
@@ -754,7 +831,7 @@ export default function CalendarPage() {
             AI Plan
           </button>
           <button
-            onClick={() => navigate('/new-post')}
+            onClick={() => navigate('/dashboard/new-post')}
             className="inline-flex items-center gap-2 px-3.5 py-2 text-sm rounded-lg font-medium bg-indigo-500 text-white hover:bg-indigo-400 shadow-glow-indigo transition"
           >
             <Plus size={14} />

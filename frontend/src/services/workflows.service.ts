@@ -1,4 +1,4 @@
-import { api, apiV2 } from './api'
+import { apiV2 } from './api'
 import type { Post } from '@/types/post.types'
 
 export interface StatusTransitionRequest {

@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { useDropzone } from 'react-dropzone'
-import { Upload, X, Image, Video } from 'lucide-react'
+import { X, Image, Video } from 'lucide-react'
 import { cn } from '@/utils/cn'
 import { api } from '@/services/api'
 import { toast } from 'sonner'

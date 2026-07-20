@@ -2,12 +2,12 @@
 import json
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Literal
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -16,11 +16,18 @@ from app.models.account import Account
 from app.models.post import Post
 from app.models.user import User
 from app.services.ollama_client import call_ollama_chat
+from app.services import credit_service
+from app.services import news_service
+from app.utils.timezones import LOCAL_TZ, parse_local_to_utc
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-DEFAULT_MODEL = "qwen2.5:0.5b"
+DEFAULT_MODEL = "gemma3:4b"
+
+# The agent reasons in the user's local time (Tashkent, UTC+5). All scheduled_at
+# values the LLM emits are interpreted as this local time and converted to UTC
+# before persisting (Celery ETAs run in UTC). See app.utils.timezones.
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
@@ -34,6 +41,13 @@ class AgentMessage(BaseModel):
 class AgentChatRequest(BaseModel):
     messages: list[AgentMessage] = Field(..., min_length=1)
     model: str = Field(default=DEFAULT_MODEL, max_length=100)
+    # Optional media the user attached in chat — used as the post's image/video.
+    media_url: str | None = None
+    media_type: str | None = None  # "image" | "video"
+    # Content format the user picked for any post created in this turn.
+    content_type: Literal["post", "story", "reel"] = "post"
+    # Whether to AI-generate an image when creating a post (and no media attached).
+    want_image: bool = False
 
 
 class AgentAction(BaseModel):
@@ -42,10 +56,18 @@ class AgentAction(BaseModel):
     error: str | None = None
 
 
+class AgentSource(BaseModel):
+    title: str
+    source: str
+    url: str
+
+
 class AgentChatResponse(BaseModel):
     message: AgentMessage
     model: str
     action: AgentAction | None = None
+    # Reputable outlets the caption content was grounded on, if any.
+    sources: list[AgentSource] = Field(default_factory=list)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -69,17 +91,118 @@ def _extract_json(text: str) -> dict | None:
         return None
 
 
+# The agent is told to write times in the user's local timezone (Tashkent,
+# UTC+5) with no offset suffix; parse_local_to_utc interprets them accordingly.
+_parse_local_to_utc = parse_local_to_utc
+
+
+def _ensure_future(dt, now):
+    """Never schedule in the past. Small models sometimes emit an earlier hour
+    of today; bump those to the next hour so the post actually schedules."""
+    if dt is None:
+        return dt
+    if dt <= now:
+        return now + timedelta(hours=1)
+    return dt
+
+
+async def _summarize_recent_posts(db: AsyncSession, user_id) -> str:
+    """Review the user's recent posts so a story image can match their content.
+
+    Returns a short text digest of recent captions/formats, or an empty string
+    if the user has no posts yet. Never raises.
+    """
+    try:
+        result = await db.execute(
+            select(Post)
+            .where(Post.user_id == user_id)
+            .order_by(Post.created_at.desc())
+            .limit(8)
+        )
+        posts = list(result.scalars().all())
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("agent: review of recent posts failed user=%s: %s", user_id, exc)
+        return ""
+
+    lines: list[str] = []
+    for p in posts:
+        caption = (p.caption or "").strip().replace("\n", " ")
+        if not caption:
+            continue
+        lines.append(f"- {caption[:120]}")
+    return "\n".join(lines[:6])
+
+
+def _placement_options(content_type: str) -> dict[str, dict[str, str]]:
+    """Map content type (post/story/reel) → Post.platform_options for Instagram."""
+    if content_type == "story":
+        return {"instagram": {"placement": "story", "aspect_ratio": "9:16"}}
+    if content_type == "reel":
+        return {"instagram": {"placement": "reel", "aspect_ratio": "9:16"}}
+    return {"instagram": {"placement": "feed", "aspect_ratio": "1:1"}}
+
+
+async def _generate_post_image(
+    caption: str,
+    content_type: str,
+    user_id: str,
+    post_context: str = "",
+) -> str | None:
+    """Best-effort AI image for a chat-created post. Returns a /media URL or None.
+
+    `post_context` is a digest of the user's recent posts (see
+    `_summarize_recent_posts`); when present it grounds the image in the
+    account's existing content so a generated story fits their style.
+
+    Never raises — if no image provider is configured or generation fails, the
+    post is still created without an image.
+    """
+    import uuid as _uuid
+    from app.services.images.router import generate_image
+    from app.services.images.storage import save_generated_image
+
+    # Vertical 9:16 canvas for story/reel, square for feed posts.
+    if content_type in ("story", "reel"):
+        width, height = 768, 1344
+    else:
+        width, height = 1024, 1024
+
+    prompt = (
+        "Professional, high-quality social media photo. No text, words or lettering anywhere. "
+        f"Theme: {caption[:180]}"
+    )
+    if post_context:
+        prompt += (
+            " Match the visual style and topics of the account's recent posts:\n"
+            f"{post_context[:400]}"
+        )
+    try:
+        result = await generate_image(prompt=prompt, width=width, height=height)
+        _, media_url = save_generated_image(result.image_bytes, user_id, str(_uuid.uuid4()))
+        return media_url
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("agent: image generation skipped/failed user=%s: %s", user_id, exc)
+        return None
+
+
 def _format_schedule(posts: list[Post]) -> str:
     if not posts:
         return "Hozircha rejalashtirilgan postlar yo'q."
     lines = []
-    for p in posts:
-        sched = p.scheduled_at.strftime("%Y-%m-%d %H:%M") if p.scheduled_at else "Rejalashtirilmagan"
+    for i, p in enumerate(posts, 1):
+        if p.scheduled_at:
+            local = p.scheduled_at
+            # DB stores tz-aware UTC; show it in the user's local timezone.
+            if local.tzinfo is not None:
+                local = local.astimezone(LOCAL_TZ)
+            sched = local.strftime("%Y-%m-%d %H:%M")
+        else:
+            sched = "Rejalashtirilmagan"
         plats = ", ".join(p.platforms or [])
         caption_short = (p.caption or "")[:60]
         if len(p.caption or "") > 60:
             caption_short += "..."
-        lines.append(f"- [{p.status.upper()}] {sched} | {plats} | {caption_short}")
+        lines.append(f"[{i}] [{p.status.upper()}] {sched} | {plats} | {caption_short}")
     return "\n".join(lines)
 
 
@@ -89,8 +212,10 @@ def _build_system_prompt(accounts: list[dict], upcoming: list[Post], now: dateti
     ) or "  Hozircha ulangan platformalar yo'q."
 
     schedule_text = _format_schedule(upcoming)
+    now_local = now.astimezone(LOCAL_TZ) if now.tzinfo else now
     manager_rules = f"""
-Hozirgi vaqt: {now.isoformat()}
+Hozirgi mahalliy vaqt (Toshkent, UTC+5): {now_local.strftime("%Y-%m-%d %H:%M")}
+Barcha vaqtlar Toshkent mahalliy vaqtida. scheduled_at ni mahalliy vaqtda yozing (vaqt mintaqasi qo'shimchasisiz, masalan "2026-06-25T18:00:00").
 
 Siz oddiy chat emassiz. Siz ContentFlow AI Menejeri sifatida ishlaysiz:
 1. Haftasiga nechta post kerakligini tavsiya qilasiz.
@@ -124,19 +249,49 @@ Rejalashtirilgan / kutilayotgan postlar:
 
 Siz quyidagi amallarni bajara olasiz:
 1. Postlar va jadval haqida ma'lumot berish
-2. Yangi post yaratish buyrug'i (foydalanuvchi so'raganda)
+2. Yangi post yaratish (foydalanuvchi so'raganda)
 3. Post rejalashtirish vaqtini belgilash
 4. Kontent tavsiya qilish
 5. Haftalik/oylik content reja tuzish va kalendarga qo'shish
+6. Rejalashtirilgan postni O'CHIRISH (kalendardan olib tashlash)
+7. Rejalashtirilgan post vaqtini O'ZGARTIRISH (boshqa kunga/vaqtga, jumladan oldingi kunga ko'chirish)
+8. So'nggi yangiliklarni topib, qaysi mavzu ko'proq like/engagement olishini tahlil qilish
 
-MUHIM — Foydalanuvchi BITTA post yaratishni so'rasa, javob oxirida:
+ISHLASH TARTIBI — AVVAL TAKLIF, KEYIN TASDIQ (JUDA MUHIM):
+- Foydalanuvchi post/reja yaratishni so'raganda, DARHOL create_post/create_plan JSON chiqarmang. Avval taklifingizni MATN bilan bering: caption(lar), format va taklif qilingan KELAJAK sana/vaqt. So'ngra tasdiq so'rang, masalan: "Shu postni 21-iyul 18:00 ga Instagram'ga rejalashtiraymi? Tasdiqlang." Bu bosqichda "action": "none" qaytaring.
+- FAQAT foydalanuvchi tasdiqlaganidan keyin (masalan "ha", "xa", "ok", "mayli", "qo'y", "joyla", "tasdiqla", "davom et") — javob oxirida create_post yoki create_plan JSON blokini chiqaring.
+- Bitta aniq taklif bering, foydalanuvchini ortiqcha savolga ko'mmang. Caption va mavzuni o'zingiz tayyorlang.
+
+MAʼLUMOTGA ASOSLANISH (MUHIM):
+- Agar quyida "ISHONCHLI MANBALAR" bloki bo'lsa, faqat o'shandagi HAQIQIY faktlar/sarlavhalarga asoslanib yozing. HECH QACHON "internetga kirishim yo'q" yoki "aniqlay olmayman" demang — sizga eng so'nggi manbalar berilgan.
+- Manba berilmagan bo'lsa, aniqmas umumlashmalardan ("so'nggi hafta yangiliklari") saqlaning va foydalanuvchidan mavzuni aniqlashtiring.
+
+KONTEKSTNI CHUQUR TUSHUNING (MUHIM):
+- Foydalanuvchi to'g'ridan "yangilik top" demasa ham, NIYATINI tushuning. Masalan "o'tgan haftada qanday yangiliklar bor", "qaysi yangilik bilan akkauntim uchadi", "qaysi mavzu ko'proq like yig'adi", "nima viral bo'ladi", "trendda nima bor", "engagement uchun nima yozay" kabi savollar — bularning hammasida sizga berilgan ISHONCHLI MANBALARdan foydalanib, real yangiliklar asosida javob bering.
+- Bunday savolga: (1) manbalardagi eng dolzarb 2-3 mavzuni sanang, (2) qaysi biri Instagram auditoriyasini ko'proq jalb qilishi (like/izoh/ulashish) mumkinligini qisqa izohlang, (3) so'ng post taklif qiling va tasdiq so'rang.
+- "Oddiy odam" tilida yozing — sodda, tushunarli, ortiqcha texnik atamasiz.
+
+SANA QOIDASI (MUHIM):
+- Barcha scheduled_at HOZIRGI VAQTDAN KEYIN bo'lishi SHART. Hech qachon o'tmishdagi sana bermang. Aniq vaqt berilmasa eng yaqin mos KELAJAK kun/vaqtni tanlang.
+
+MUHIM — Foydalanuvchi BITTA postni TASDIQLAGANDA, javob oxirida:
 ```json
 {{"action": "create_post", "caption": "post matni", "platforms": ["instagram"], "scheduled_at": "2026-05-16T18:00:00"}}
 ```
 
-MUHIM — Foydalanuvchi REJA (haftalik/oylik/ko'p postli) yaratishni so'rasa yoki "reja tuz", "jadval tuz", "7 kun", "haftalik plan" kabi so'z ishlatsa, javob oxirida:
+MUHIM — Foydalanuvchi REJANI (haftalik/oylik/ko'p postli) TASDIQLAGANDA, javob oxirida:
 ```json
 {{"action": "create_plan", "posts": [{{"caption": "post 1 matni", "platforms": ["instagram"], "scheduled_at": "2026-05-17T11:00:00", "format": "carousel", "topic": "mavzu"}}, {{"caption": "post 2 matni", "platforms": ["telegram"], "scheduled_at": "2026-05-18T09:00:00", "format": "text", "topic": "mavzu"}}]}}
+```
+
+POSTNI O'CHIRISH — Foydalanuvchi kalendardan/jadvaldan postni o'chirishni so'rab TASDIQLAGANDA. Yuqoridagi "Rejalashtirilgan / kutilayotgan postlar" ro'yxatidagi [N] raqamidan foydalaning:
+```json
+{{"action": "delete_post", "index": 2}}
+```
+
+POSTNI QAYTA REJALASH — Foydalanuvchi post vaqtini o'zgartirishni (boshqa kunga/vaqtga, jumladan oldingi kunga) so'rab TASDIQLAGANDA. [N] raqami + yangi vaqt:
+```json
+{{"action": "reschedule_post", "index": 2, "scheduled_at": "2026-05-19T09:00:00"}}
 ```
 
 Yoki faqat ma'lumot berayotgan bo'lsangiz:
@@ -149,8 +304,109 @@ Qoidalar:
 - Jadval ko'rsatishda hozirgi vaqtdan keyingi postlarni ko'rsating
 - Post yaratishda platforms ro'yxatida faqat ulangan platformalarni ishlating; platforma ulanmagan bo'lsa barcha platformalar uchun yozing
 - Agar foydalanuvchi aniq sana bermasa, yuqoridagi eng yaxshi kun/vaqt qoidalaridan foydalaning
-- scheduled_at ISO 8601 formatida bo'lishi kerak
-- create_plan da kamida 5-7 post bo'lsin, har bir kun uchun aniq vaqt va caption bering"""
+- scheduled_at ISO 8601 formatida va Toshkent mahalliy vaqtida bo'lishi kerak (vaqt mintaqasi qo'shimchasisiz)
+- create_plan da kamida 5-7 post bo'lsin, har bir kun uchun aniq vaqt va caption bering
+
+NAMUNA (faqat TARTIBNI ko'rsatadi — matnni AYNAN ko'chirmang, har doim mavzuga mos original caption yozing):
+Foydalanuvchi: "Kitob do'konim haqida post yoz"
+Siz: Taklif — caption: "<mavzuga mos qisqa, jonli post matni + 2-3 hashtag>". Buni ertaga 18:00 ga Instagram'ga rejalashtiraymi? Tasdiqlang.
+```json
+{{"action": "none"}}
+```
+Foydalanuvchi: "ha, qo'y"
+Siz: Rejalashtiryapman ✅
+```json
+{{"action": "create_post", "caption": "<mavzuga mos yakuniy post matni>", "platforms": ["instagram"], "scheduled_at": "<kelajakdagi ISO sana-vaqt>"}}
+```
+
+AMALNI TO'G'RI TANLASH (JUDA MUHIM):
+- "o'chir", "o'chirib tashla", "olib tashla", "bekor qil", "kerak emas" + MAVJUD post → delete_post (index bilan). create_post EMAS.
+- "o'tkaz", "ko'chir", "vaqtini o'zgartir", "boshqa kunga/vaqtga", "oldingi kunga", "kechroq", "ertaroq" + MAVJUD post → reschedule_post (index + yangi scheduled_at). create_post EMAS va yangi post yaratMANG.
+- Faqat butunlay yangi mavzu so'ralganda create_post ishlating.
+
+NAMUNA — O'CHIRISH:
+Foydalanuvchi: "birinchi postni o'chir"
+Siz: [1]-post ("<qisqa caption>") ni o'chiraymi? Tasdiqlang.
+```json
+{{"action": "none"}}
+```
+Foydalanuvchi: "ha o'chir"
+Siz: O'chirildi ✅
+```json
+{{"action": "delete_post", "index": 1}}
+```
+
+NAMUNA — VAQTINI O'ZGARTIRISH (qayta rejalash):
+Foydalanuvchi: "birinchi postni 25-iyul 10:00 ga o'tkaz"
+Siz: [1]-postni 25-iyul 10:00 ga ko'chiraymi? Tasdiqlang.
+```json
+{{"action": "none"}}
+```
+Foydalanuvchi: "ha o'tkaz"
+Siz: Vaqti o'zgartirildi ✅
+```json
+{{"action": "reschedule_post", "index": 1, "scheduled_at": "2026-07-25T10:00:00"}}
+```"""
+
+
+# ── Reliable-source grounding ──────────────────────────────────────────────────
+# When the user asks to create content about news / a topic, pull recent items
+# from reputable outlets so the agent uses real facts instead of guessing.
+_WEB_TRIGGER_WORDS = frozenset({
+    "yangilik", "yangiliklar", "yangi", "so'nggi", "songgi", "bugungi",
+    "trend", "trendlar", "xabar", "xabarlar", "haqida", "mavzusida",
+    "news", "latest", "recent", "today", "trending", "update", "updates",
+    "breaking", "manba", "manbalar", "hafta", "haftalik",
+})
+_CREATE_WORDS = frozenset({
+    "post", "postlar", "joyla", "joylagin", "joylab", "reja", "plan",
+    "content", "kontent", "yoz", "yozgin", "yozib", "tayyorla", "create",
+    "story", "reels", "carousel",
+})
+# Engagement / virality intent — a normal user asking which news would get more
+# likes / go viral still wants us to look at real current news.
+_ENGAGEMENT_WORDS = frozenset({
+    "like", "likes", "layk", "laik", "laykla", "uchadi", "uchish", "uchishi",
+    "viral", "mashhur", "ommabop", "engagement", "jalb", "izoh", "izohlar",
+    "komment", "kommentariya", "comment", "top", "ko'proq", "koproq", "eng",
+    "qiziqarli", "auditoriya", "obuna", "followers",
+})
+# Question words — "qanday yangiliklar bor" / "qaysi yangilik" style asks.
+_QUESTION_WORDS = frozenset({
+    "qanday", "qaysi", "nima", "qanaqa", "qachon", "qanchalik", "nimalar",
+})
+
+
+def _wants_web_sources(text: str) -> bool:
+    low = text.lower()
+    words = set(re.findall(r"[\w']+", low))
+    if not (words & _WEB_TRIGGER_WORDS):
+        return False
+    # Fetch when the user wants to create content, is asking about news, or is
+    # asking which topic/news would perform best (likes / virality).
+    return bool(
+        words & _CREATE_WORDS
+        or words & _ENGAGEMENT_WORDS
+        or words & _QUESTION_WORDS
+    )
+
+
+def _extract_topic(text: str) -> str:
+    low = text.lower()
+    for marker in (" haqida", " mavzusida", " about ", " on "):
+        idx = low.find(marker)
+        if idx > 0:
+            return text[:idx].strip()[-80:]
+    return text.strip()[:120]
+
+
+async def _fetch_reliable_sources(text: str) -> list:
+    topic = _extract_topic(text)
+    try:
+        return await news_service.fetch_news(topic=topic, limit=6)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("agent: reliable-source fetch failed: %s", exc)
+        return []
 
 
 # ── Endpoint ──────────────────────────────────────────────────────────────────
@@ -167,10 +423,15 @@ async def agent_chat(
     acc_result = await db.execute(
         select(Account).where(Account.user_id == current_user.id, Account.is_active == True)
     )
+    account_rows = list(acc_result.scalars().all())
     accounts = [
         {"platform": a.platform, "account_name": a.account_name}
-        for a in acc_result.scalars().all()
+        for a in account_rows
     ]
+    # First active account id per platform — used to build publishable targets.
+    platform_account: dict[str, str] = {}
+    for a in account_rows:
+        platform_account.setdefault(a.platform, str(a.id))
 
     # Load upcoming posts (scheduled or draft)
     now = datetime.now(timezone.utc)
@@ -187,10 +448,31 @@ async def agent_chat(
 
     system_prompt = _build_system_prompt(accounts, upcoming, now)
 
+    # Ground content in reputable sources when the user asks to create posts about
+    # a topic / news, so captions use real facts instead of "I have no internet".
+    sources_items: list = []
+    last_user_msg = next(
+        (m.content for m in reversed(data.messages) if m.role == "user"), ""
+    )
+    if last_user_msg and _wants_web_sources(last_user_msg):
+        sources_items = await _fetch_reliable_sources(last_user_msg)
+        if sources_items:
+            system_prompt += "\n\n" + news_service.build_sources_block(sources_items)
+
+    # If the user attached a media file in chat, tell the agent it's available so
+    # it creates a post using it (the file is auto-attached server-side).
+    if data.media_url:
+        system_prompt += (
+            f"\n\nThe user has attached a {data.media_type or 'media'} file that is "
+            f"ready to be posted. When you create_post, this file will be attached "
+            f"automatically — schedule the post for the requested day/time."
+        )
+
     messages = [m.model_dump() for m in data.messages]
     messages = [m for m in messages if m.get("role") != "system"]
     all_messages = [{"role": "system", "content": system_prompt}] + messages
 
+    await credit_service.consume(db, current_user, "agent_chat")
     raw_text = await _call_ollama(all_messages, data.model)
 
     # Parse action from response
@@ -204,17 +486,42 @@ async def agent_chat(
         if action_type == "create_post":
             try:
                 caption = parsed.get("caption", "")
-                platforms = parsed.get("platforms", [a["platform"] for a in accounts])
+                raw_platforms = parsed.get("platforms", [a["platform"] for a in accounts])
+                # Convert platform names to publishable "platform:account_id" targets
+                # so the scheduled post can actually be published with the media.
+                platforms = []
+                for p in raw_platforms:
+                    p = str(p)
+                    if ":" in p:
+                        platforms.append(p)
+                    elif p in platform_account:
+                        platforms.append(f"{p}:{platform_account[p]}")
+                    else:
+                        platforms.append(p)
                 scheduled_at_str = parsed.get("scheduled_at")
+                # Interpret the LLM's time as local (Tashkent) and store UTC.
+                scheduled_at = _parse_local_to_utc(scheduled_at_str)
+                scheduled_at = _ensure_future(scheduled_at, now)
 
-                scheduled_at = None
-                if scheduled_at_str:
-                    try:
-                        scheduled_at = datetime.fromisoformat(scheduled_at_str)
-                        if scheduled_at.tzinfo is None:
-                            scheduled_at = scheduled_at.replace(tzinfo=timezone.utc)
-                    except ValueError:
-                        scheduled_at = None
+                # Media: prefer what the user attached; otherwise optionally
+                # generate an image when the user asked for one.
+                media_url = data.media_url
+                media_type = data.media_type
+                image_generated = False
+                if not media_url and data.want_image and caption:
+                    # For a story, first review the account's recent posts so the
+                    # generated image matches their existing content, then generate.
+                    post_context = ""
+                    if data.content_type == "story":
+                        post_context = await _summarize_recent_posts(db, current_user.id)
+                    await credit_service.consume(db, current_user, "image")
+                    gen_url = await _generate_post_image(
+                        caption, data.content_type, str(current_user.id), post_context
+                    )
+                    if gen_url:
+                        media_url = gen_url
+                        media_type = "image"
+                        image_generated = True
 
                 post = Post(
                     user_id=current_user.id,
@@ -222,6 +529,11 @@ async def agent_chat(
                     platforms=platforms,
                     scheduled_at=scheduled_at,
                     status="scheduled" if scheduled_at else "draft",
+                    # Attach the media (uploaded or AI-generated), if any.
+                    media_url=media_url,
+                    media_type=media_type,
+                    # Carry the chosen content type into Instagram placement.
+                    platform_options=_placement_options(data.content_type),
                 )
                 db.add(post)
                 await db.flush()
@@ -235,6 +547,11 @@ async def agent_chat(
                         "platforms": platforms,
                         "scheduled_at": scheduled_at_str,
                         "status": post.status,
+                        "content_type": data.content_type,
+                        "image_generated": image_generated,
+                        "reviewed_recent_posts": bool(
+                            data.content_type == "story" and image_generated
+                        ),
                     },
                 )
                 # Remove JSON from display text
@@ -262,14 +579,9 @@ async def agent_chat(
                     fmt = item.get("format", "")
                     topic = item.get("topic", "")
 
-                    scheduled_at = None
-                    if scheduled_at_str:
-                        try:
-                            scheduled_at = datetime.fromisoformat(scheduled_at_str)
-                            if scheduled_at.tzinfo is None:
-                                scheduled_at = scheduled_at.replace(tzinfo=timezone.utc)
-                        except ValueError:
-                            scheduled_at = None
+                    # Interpret the LLM's time as local (Tashkent) and store UTC.
+                    scheduled_at = _parse_local_to_utc(scheduled_at_str)
+                    scheduled_at = _ensure_future(scheduled_at, now)
 
                     post = Post(
                         user_id=current_user.id,
@@ -304,6 +616,55 @@ async def agent_chat(
                 logger.error("Agent create_plan failed: %s", e)
                 action = AgentAction(type="create_plan", error=str(e))
                 display_text = re.sub(r"```json[\s\S]*?```", "", raw_text).strip()
+        elif action_type == "delete_post":
+            try:
+                idx = int(parsed.get("index", 0))
+                if idx < 1 or idx > len(upcoming):
+                    raise ValueError(f"index {idx} ro'yxatda yo'q (1..{len(upcoming)})")
+                target = upcoming[idx - 1]
+                cap = (target.caption or "")[:60]
+                # Clear FK-referencing logs first (post_logs → posts is RESTRICT).
+                await db.execute(
+                    text("DELETE FROM post_logs WHERE post_id = CAST(:pid AS uuid)"),
+                    {"pid": str(target.id)},
+                )
+                await db.delete(target)
+                await db.flush()
+                action = AgentAction(
+                    type="delete_post",
+                    result={"deleted_index": idx, "caption": cap},
+                )
+                display_text = re.sub(r"```json[\s\S]*?```", "", raw_text).strip()
+                if not display_text:
+                    display_text = f"Post o'chirildi: {cap}"
+            except Exception as e:
+                logger.error("Agent delete_post failed: %s", e)
+                action = AgentAction(type="delete_post", error=str(e))
+                display_text = re.sub(r"```json[\s\S]*?```", "", raw_text).strip()
+
+        elif action_type == "reschedule_post":
+            try:
+                idx = int(parsed.get("index", 0))
+                if idx < 1 or idx > len(upcoming):
+                    raise ValueError(f"index {idx} ro'yxatda yo'q (1..{len(upcoming)})")
+                target = upcoming[idx - 1]
+                new_dt = _ensure_future(_parse_local_to_utc(parsed.get("scheduled_at")), now)
+                target.scheduled_at = new_dt
+                target.status = "scheduled"
+                await db.flush()
+                lbl = new_dt.astimezone(LOCAL_TZ).strftime("%Y-%m-%d %H:%M") if new_dt else "?"
+                action = AgentAction(
+                    type="reschedule_post",
+                    result={"index": idx, "scheduled_at": lbl, "caption": (target.caption or "")[:60]},
+                )
+                display_text = re.sub(r"```json[\s\S]*?```", "", raw_text).strip()
+                if not display_text:
+                    display_text = f"Post vaqti o'zgartirildi: {lbl}"
+            except Exception as e:
+                logger.error("Agent reschedule_post failed: %s", e)
+                action = AgentAction(type="reschedule_post", error=str(e))
+                display_text = re.sub(r"```json[\s\S]*?```", "", raw_text).strip()
+
         else:
             action = AgentAction(type="none")
             display_text = re.sub(r"```json[\s\S]*?```", "", raw_text).strip()
@@ -312,4 +673,8 @@ async def agent_chat(
         message=AgentMessage(role="assistant", content=display_text or raw_text),
         model=data.model,
         action=action,
+        sources=[
+            AgentSource(title=it.title, source=it.source, url=it.url)
+            for it in sources_items
+        ],
     )

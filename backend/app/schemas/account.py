@@ -1,6 +1,11 @@
+import re
 import uuid
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+
+
+def _strip_html(value: str) -> str:
+    return re.sub(r'<[^>]+>', '', value)
 
 
 class AccountCredentials(BaseModel):
@@ -20,12 +25,23 @@ class InstagramLoginRequest(BaseModel):
     username: str
     password: str
     account_name: str | None = None  # display name; defaults to username
+    verification_code: str | None = None  # 6-digit 2FA code, if 2FA is enabled
+
+    @field_validator("account_name")
+    @classmethod
+    def sanitize_account_name(cls, v: str | None) -> str | None:
+        return _strip_html(v).strip() if v is not None else None
 
 
 class ConnectAccountRequest(BaseModel):
     platform: str  # instagram | tiktok | telegram
     account_name: str
     credentials: AccountCredentials
+
+    @field_validator("account_name")
+    @classmethod
+    def sanitize_account_name(cls, v: str) -> str:
+        return _strip_html(v).strip()
 
 
 class TelegramAddChannelRequest(BaseModel):
@@ -60,5 +76,8 @@ class AccountOut(BaseModel):
     account_name: str
     is_active: bool
     created_at: datetime
+    # V4 — populated only for Instagram accounts connected for auto-reply.
+    ig_user_id: str | None = None
+    ig_webhook_subscribed: bool = False
 
     model_config = {"from_attributes": True}

@@ -17,7 +17,7 @@ export const accountsService = {
     return data
   },
 
-  async connectInstagram(payload: { username: string; password: string; account_name?: string }): Promise<Account> {
+  async connectInstagram(payload: { username: string; password: string; account_name?: string; verification_code?: string }): Promise<Account> {
     const { data } = await api.post<Account>('/accounts/instagram/login', payload)
     return data
   },

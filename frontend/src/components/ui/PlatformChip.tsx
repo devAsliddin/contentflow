@@ -7,6 +7,7 @@ export type PlatformKind =
   | 'youtube'
   | 'twitter'
 
+// eslint-disable-next-line react-refresh/only-export-components -- shared lookup table colocated with chip
 export const PLATFORM_META: Record<
   PlatformKind,
   { letter: string; label: string; fg: string; bg: string; ring: string }

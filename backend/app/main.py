@@ -6,6 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
@@ -14,6 +15,9 @@ from app.config import get_settings
 from app.database import engine, Base
 from app.routers import auth, posts, accounts, ai_plan, scheduler, analytics, upload, admin
 from app.routers import oauth, ai_v2, analytics_v2, ai_v2_ext, workflows, ai_chat, ai_agent
+from app.routers import instagram_connect, instagram_webhook, autoreply
+from app.routers import analysis as analysis_v5
+from app.routers import facebook_connect, facebook_webhook, ai_posts
 
 settings = get_settings()
 limiter = Limiter(key_func=get_remote_address)
@@ -59,6 +63,26 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "SAMEORIGIN"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: blob:; "
+            "connect-src 'self'"
+        )
+        return response
+
+
+app.add_middleware(SecurityHeadersMiddleware)
+
 # CORS — origins from settings (comma-separated in env)
 app.add_middleware(
     CORSMiddleware,
@@ -97,6 +121,20 @@ app.include_router(ai_v2_ext.router,     prefix="/api/v2/ai",         tags=["ai-
 app.include_router(workflows.router,     prefix="/api/v2",            tags=["workflows-v2"])
 app.include_router(ai_chat.router,       prefix="/api/v2/ai",         tags=["ai-chat"])
 app.include_router(ai_agent.router,      prefix="/api/v2/ai",         tags=["ai-agent"])
+
+# V4 — Instagram auto-reply (DM + comment). Paths match the Meta app config
+# (OAuth redirect URI + webhook callback URL), so they are NOT under /api/v1|v2.
+app.include_router(instagram_connect.router, prefix="/api/accounts/instagram", tags=["instagram-connect"])
+app.include_router(instagram_webhook.router, prefix="/api/webhooks",           tags=["instagram-webhook"])
+app.include_router(autoreply.router,         prefix="/api",                    tags=["autoreply-v4"])
+
+# V5 — AI Analyst (frontend calls /api/v1/accounts/{id}/analysis/* via the v1 api client)
+app.include_router(analysis_v5.router, prefix="/api/v1/accounts", tags=["analysis-v5"])
+
+# V6 — Facebook OAuth + webhook + AI Post Creator
+app.include_router(facebook_connect.router, prefix="/api/accounts/facebook", tags=["facebook-connect"])
+app.include_router(facebook_webhook.router, prefix="/api/webhooks",           tags=["facebook-webhook"])
+app.include_router(ai_posts.router,         prefix="/api/ai-posts",           tags=["ai-posts-v6"])
 
 # V2-INFRA-002: analytics cache invalidation on post create is triggered inside workflows router
 

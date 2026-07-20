@@ -37,10 +37,18 @@ function processQueue(error: unknown, token: string | null = null) {
   failedQueue = []
 }
 
+// Auth endpoints must surface their own 401s (e.g. wrong email/password) to the
+// caller instead of triggering a token refresh + redirect to /login.
+const AUTH_ENDPOINTS = ['/auth/login', '/auth/register', '/auth/refresh']
+
 async function handle401(error: any, instance: typeof api) {
   const originalRequest = error.config
 
-  if (error.response?.status === 401 && !originalRequest._retry) {
+  const isAuthEndpoint = AUTH_ENDPOINTS.some((path) =>
+    (originalRequest?.url || '').includes(path)
+  )
+
+  if (error.response?.status === 401 && !isAuthEndpoint && !originalRequest._retry) {
     if (isRefreshing) {
       return new Promise((resolve, reject) => {
         failedQueue.push({ resolve, reject })
@@ -87,5 +95,18 @@ async function handle401(error: any, instance: typeof api) {
   return Promise.reject(error)
 }
 
-api.interceptors.response.use((r) => r, (err) => handle401(err, api))
-apiV2.interceptors.response.use((r) => r, (err) => handle401(err, apiV2))
+// Surface "out of AI credits" (HTTP 402) as a toast everywhere.
+async function handleError(err: any, instance: typeof api) {
+  if (err.response?.status === 402) {
+    const detail = err.response?.data?.detail || 'AI kreditlaringiz tugadi.'
+    try {
+      const { toast } = await import('sonner')
+      toast.error(detail)
+    } catch { /* toast unavailable — ignore */ }
+    return Promise.reject(err)
+  }
+  return handle401(err, instance)
+}
+
+api.interceptors.response.use((r) => r, (err) => handleError(err, api))
+apiV2.interceptors.response.use((r) => r, (err) => handleError(err, apiV2))

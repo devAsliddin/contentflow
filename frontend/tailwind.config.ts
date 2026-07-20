@@ -5,14 +5,14 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        bg:       '#0D0D0F',
-        surface:  '#16161A',
-        surface2: '#1C1C22',
-        line:     '#2A2A35',
-        line2:    '#3A3A48',
-        ink:      '#E9E9F0',
-        mute:     '#8A8AA0',
-        faint:    '#5A5A70',
+        bg:       'var(--cf-bg)',
+        surface:  'var(--cf-surface)',
+        surface2: 'var(--cf-surface2)',
+        line:     'var(--cf-line)',
+        line2:    'var(--cf-line2)',
+        ink:      'var(--cf-ink)',
+        mute:     'var(--cf-mute)',
+        faint:    'var(--cf-faint)',
         indigo: {
           400: '#8B85FF',
           500: '#6C63FF',

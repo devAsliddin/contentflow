@@ -25,6 +25,9 @@ class PlanPost(BaseModel):
     platform: str
     idea: str
     scheduled_time: str       # "HH:MM"
+    content_type: str = "image"      # "image" | "video"
+    # When content_type == "video": what video to shoot/prepare for this day.
+    video_brief: str = ""
 
 
 class WeeklyPlan(BaseModel):

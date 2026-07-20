@@ -1,8 +1,13 @@
+import re
 import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+
+def _strip_html(value: str) -> str:
+    return re.sub(r'<[^>]+>', '', value)
 
 
 class PlatformPublishOptions(BaseModel):
@@ -18,6 +23,11 @@ class CreatePostRequest(BaseModel):
     platform_options: dict[str, PlatformPublishOptions] = Field(default_factory=dict)
     scheduled_at: datetime | None = None
 
+    @field_validator("caption")
+    @classmethod
+    def sanitize_caption(cls, v: str | None) -> str | None:
+        return _strip_html(v) if v is not None else None
+
 
 class UpdatePostRequest(BaseModel):
     caption: str | None = None
@@ -27,6 +37,11 @@ class UpdatePostRequest(BaseModel):
     platform_options: dict[str, PlatformPublishOptions] | None = None
     scheduled_at: datetime | None = None
     status: str | None = None
+
+    @field_validator("caption")
+    @classmethod
+    def sanitize_caption(cls, v: str | None) -> str | None:
+        return _strip_html(v) if v is not None else None
 
 
 class PostReviewTarget(BaseModel):

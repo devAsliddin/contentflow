@@ -14,6 +14,8 @@ from app.models.user import User
 from app.models.post import Post, PostLog
 from app.middleware.auth_middleware import get_current_user
 from app.services.ai_service import AIService
+from app.services import credit_service
+from app.utils.timezones import to_local
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +52,7 @@ async def generate_weekly_plan_v2(
 
     Uses claude-sonnet-4-20250514 for higher quality output.
     """
+    await credit_service.consume(db, current_user, "plan_v2")
     # Gather posting history for best-time hints
     best_times: dict[str, str] = {}
     if data.include_best_times:
@@ -65,9 +68,8 @@ async def generate_weekly_plan_v2(
             rows = result.all()
             hour_by_platform: dict[str, dict[int, int]] = defaultdict(lambda: defaultdict(int))
             for log, post in rows:
-                ts = log.executed_at
-                if ts.tzinfo is None:
-                    ts = ts.replace(tzinfo=timezone.utc)
+                # Local time so best_times are reported as Tashkent clock hours.
+                ts = to_local(log.executed_at)
                 for entry in (post.platforms or []):
                     plat = str(entry).split(":")[0]
                     hour_by_platform[plat][ts.hour] += 1
@@ -202,8 +204,10 @@ class ABCaptionResponse(BaseModel):
 async def generate_ab_captions(
     data: ABCaptionRequest,
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """V2-AI-005 — Generate 2-5 A/B caption variants using claude-haiku."""
+    await credit_service.consume(db, current_user, "ab_captions")
     labels = ["A", "B", "C", "D", "E"][:data.variants]
 
     existing_clause = ""

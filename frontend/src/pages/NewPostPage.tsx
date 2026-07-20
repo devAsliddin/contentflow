@@ -3,9 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
-  UploadCloud, X, Play, Scissors, Captions, Image as ImageIcon, Music,
+  UploadCloud, X, Scissors, Image as ImageIcon, Music,
   Bold, Italic, Hash, AtSign, Smile, Sparkles, Loader2, Send, Languages,
-  Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Calendar, Repeat2,
+  Check, ChevronLeft, ChevronRight, Repeat2,
   MessageSquare, MapPin, UserPlus, Info, Eye, AlertTriangle, Crop,
 } from 'lucide-react'
 import { accountsService } from '@/services/accounts.service'
@@ -360,9 +360,12 @@ export default function NewPostPage() {
 
   useEffect(() => {
     setReview(null)
-    // Sync contentType with media type
-    if (mediaType === 'video') setContentType('reel')
-    else setContentType('post')
+    // Keep contentType valid for the media type, but preserve the user's choice
+    // (e.g. Story survives a re-crop). Image → post|story; Video → reel|story.
+    setContentType((prev) => {
+      if (mediaType === 'video') return prev === 'story' ? 'story' : 'reel'
+      return prev === 'story' ? 'story' : 'post'
+    })
 
     setPlatformOptions((current) => ({
       ...current,
@@ -383,6 +386,13 @@ export default function NewPostPage() {
 
   function updatePlatformOption(platform: 'instagram' | 'tiktok', patch: { placement?: PlatformPlacement; aspect_ratio?: AspectRatio }) {
     setReview(null)
+    // Keep the Live Preview switcher (contentType) in sync when the Format &
+    // destination panel changes the Instagram placement — both directions agree.
+    if (platform === 'instagram' && patch.placement) {
+      setContentType(
+        patch.placement === 'story' ? 'story' : patch.placement === 'reel' ? 'reel' : 'post',
+      )
+    }
     setPlatformOptions((current) => ({
       ...current,
       [platform]: {
@@ -402,12 +412,28 @@ export default function NewPostPage() {
   }
 
   function buildPayload(scheduledFor: string | null = null): CreatePostRequest {
+    // The Live Preview switcher (contentType) is the single source of truth for
+    // Instagram placement — what the user sees is what gets published. Story →
+    // story, Reel → reel, Post → feed. This keeps preview and the real post in sync.
+    const igPlacement: PlatformPlacement =
+      contentType === 'story' ? 'story' : contentType === 'reel' ? 'reel' : 'feed'
+    const finalOptions: PlatformOptions = {
+      ...platformOptions,
+      instagram: {
+        ...(platformOptions.instagram || {}),
+        placement: igPlacement,
+        aspect_ratio:
+          igPlacement === 'story' || igPlacement === 'reel'
+            ? '9:16'
+            : platformOptions.instagram?.aspect_ratio || '1:1',
+      },
+    }
     return {
       caption: caption.trim(),
       media_url: mediaUrl || undefined,
       media_type: mediaType,
       platforms: selectedPlatformEntries(),
-      platform_options: platformOptions,
+      platform_options: finalOptions,
       scheduled_at: scheduledFor,
     }
   }
@@ -448,12 +474,13 @@ export default function NewPostPage() {
         image_url: mediaUrl || undefined,
       })
       const tags = result.hashtags.length > 0
-        ? '\n\n' + result.hashtags.map((h) => `#${h}`).join(' ')
+        ? '\n\n' + result.hashtags.map((h) => `#${h.replace(/^#+/, '')}`).join(' ')
         : ''
       setCaption(result.caption + tags)
       toast.success(mediaUrl ? 'Rasm asosida caption yaratildi' : 'Caption yaratildi')
-    } catch {
-      toast.error('Caption yaratib bo\'lmadi')
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail
+      toast.error(typeof detail === 'string' ? detail : 'Caption yaratib bo\'lmadi')
     } finally {
       setGenerating(false)
     }
@@ -524,7 +551,7 @@ export default function NewPostPage() {
   )]
 
   return (
-    <div className="page-in px-8 py-6 grid grid-cols-12 gap-6 max-w-[1440px]">
+    <div className="page-in px-4 md:px-8 py-6 grid grid-cols-12 gap-6 max-w-[1440px]">
       {/* Crop modal */}
       {showCrop && mediaUrl && mediaType === 'image' && (
         <CropModal
@@ -561,7 +588,7 @@ export default function NewPostPage() {
                 Crop &amp; Resize
               </button>
               <span className="text-[11px] text-faint">
-                16 aspect ratios — 1:1, 4:5, 9:16, 16:9, custom…
+                8 aspect ratios — 1:1, 4:5, 9:16, 16:9, custom…
               </span>
             </div>
           )}
@@ -709,7 +736,7 @@ export default function NewPostPage() {
               Select all
             </button>
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {(['instagram', 'tiktok', 'telegram'] as PlatformKind[]).map((kind) => (
               <PlatformGroup
                 key={kind}

@@ -229,11 +229,7 @@ export default function TemplatesPage({ onSelectTemplate }: Props) {
 
   return (
     <div className="page-in px-8 py-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <div className="text-[10px] uppercase tracking-[0.18em] text-faint mb-1">Content</div>
-          <h1 className="font-display text-2xl text-ink">Template Library</h1>
-        </div>
+      <div className="flex items-center justify-end mb-6">
         <button
           onClick={() => setShowCreate(true)}
           className="inline-flex items-center gap-2 px-3.5 py-2 text-sm rounded-lg font-medium bg-indigo-500 text-white hover:bg-indigo-400 shadow-glow-indigo transition"

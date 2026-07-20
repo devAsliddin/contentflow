@@ -7,6 +7,15 @@ export interface Account {
   account_name: string
   is_active: boolean
   created_at: string
+  // V4 — set for Instagram accounts connected for auto-reply
+  ig_user_id?: string | null
+  ig_webhook_subscribed?: boolean
+  // V6 — Facebook page fields
+  fb_page_id?: string | null
+  fb_page_name?: string | null
+  fb_user_id?: string | null
+  fb_webhook_subscribed?: boolean | null
+  token_status?: 'active' | 'expired' | null
 }
 
 export interface AccountCredentials {

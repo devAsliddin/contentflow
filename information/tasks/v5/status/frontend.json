@@ -1,0 +1,1 @@
+{ "agent": "frontend", "version": "v5", "status": "done", "tasks_done": ["types/analysis.types.ts", "services/analysis.service.ts", "pages/AIAnalystPage.tsx", "App.tsx route", "AccountsPage.tsx AI button"], "blockers": [], "updated_at": "2026-06-10T15:00:00Z" }

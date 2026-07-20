@@ -15,6 +15,7 @@ from app.models.user import User
 from app.models.post import Post, PostLog
 from app.middleware.auth_middleware import get_current_user
 from app.redis_client import get_redis
+from app.utils.timezones import to_local
 
 logger = logging.getLogger(__name__)
 
@@ -75,8 +76,8 @@ async def generate_weekly_report(
         from reportlab.lib import colors
     except ImportError:
         raise HTTPException(
-            status_code=500,
-            detail="reportlab package not installed. Run: pip install reportlab",
+            status_code=501,
+            detail="PDF report export is not available",
         )
 
     now = datetime.now(timezone.utc)
@@ -289,9 +290,9 @@ async def get_best_posting_time(
     day_counts: dict[int, int] = defaultdict(int)
 
     for log, post in rows:
-        ts = log.executed_at
-        if ts.tzinfo is None:
-            ts = ts.replace(tzinfo=timezone.utc)
+        # Convert to Tashkent local time so the recommended hour/day are local
+        # clock values, not UTC (users read "soat 18:00" as their local time).
+        ts = to_local(log.executed_at)
         hour_counts[ts.hour] += 1
         day_counts[ts.weekday()] += 1  # 0=Monday
 

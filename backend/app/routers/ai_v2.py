@@ -6,9 +6,13 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database import get_db
 from app.models.user import User
 from app.middleware.auth_middleware import get_current_user
 from app.services.ai_service import AIService
+from app.services import credit_service
 
 logger = logging.getLogger(__name__)
 
@@ -260,8 +264,10 @@ def _fallback_tone(caption: str) -> tuple[dict[str, float], list[str]]:
 async def rewrite_caption(
     data: RewriteCaptionRequest,
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """V2-AI-001 — Rewrite a caption for a specific platform style using claude-haiku."""
+    await credit_service.consume(db, current_user, "rewrite")
     platform_instruction = _PLATFORM_INSTRUCTIONS[data.target_platform]
     char_limit = _PLATFORM_CHAR_LIMITS[data.target_platform]
 
@@ -303,6 +309,7 @@ async def rewrite_caption(
 async def suggest_hashtags(
     data: HashtagRequest,
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """V2-AI-002 - suggest trending-style and niche hashtags for a post."""
     if not data.caption and not data.topic:
@@ -357,6 +364,10 @@ Rules:
         source = "fallback"
         trending, niche = _fallback_hashtags(data)
 
+    # Only charge when the actual AI produced the result (local fallback is free).
+    if source == "ai":
+        await credit_service.consume(db, current_user, "hashtags")
+
     hashtags = _dedupe_hashtags([*trending, *niche], data.limit)
     trending = _dedupe_hashtags(trending, data.limit)
     niche = _dedupe_hashtags(niche, data.limit)
@@ -385,6 +396,7 @@ Rules:
 async def analyze_tone(
     data: ToneAnalyzeRequest,
     current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """V2-AI-003 - analyze whether a post is professional, casual, or fun."""
     platform_clause = f"Platform: {data.target_platform}" if data.target_platform else "Platform: general"
@@ -436,6 +448,9 @@ Rules:
         scores, suggestions = _fallback_tone(data.caption)
         tone = _dominant_tone(scores)
         confidence = max(scores.values())
+
+    if source == "ai":
+        await credit_service.consume(db, current_user, "tone")
 
     return ToneAnalyzeResponse(
         tone=tone,

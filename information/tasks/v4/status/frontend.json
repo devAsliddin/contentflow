@@ -1,0 +1,16 @@
+{
+  "agent": "frontend",
+  "version": "v4",
+  "tasks": [
+    {
+      "id": "FE-V4-006",
+      "status": "done",
+      "notes": "AutoReplyRulesPage + RuleEditorDialog (Radix). Route /dashboard/autoreply + sidebar link. Rule cards with active toggle, edit/delete, keyword chips. TanStack Query mutations + Sonner. tsc --noEmit clean."
+    },
+    {
+      "id": "FE-V4-007",
+      "status": "done",
+      "notes": "ConnectInstagramButton (no-password notice, redirect to OAuth start) + AutoReplyLogsPanel (StatusPill, 15s refetch). autoreply.service.ts + autoreply.types.ts."
+    }
+  ]
+}

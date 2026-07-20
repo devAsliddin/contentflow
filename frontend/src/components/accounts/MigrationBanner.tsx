@@ -34,6 +34,7 @@ export default function MigrationBanner() {
     if (staleLegacy.length > 0 && !markMigrated.isPending) {
       markMigrated.mutate()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run only when data changes; mutation ref is stable
   }, [data])
 
   if (dismissed || !data || data.needs_reconnect === 0) return null

@@ -3,10 +3,11 @@ import {
   LayoutDashboard, PlusCircle, CalendarDays, UsersRound,
   Sparkles, LineChart, Settings2, PanelLeftClose, PanelLeftOpen,
   ChevronUp, ShieldCheck, LogOut, FileEdit, ClipboardCheck, Layers,
-  ChevronDown, X, MessageSquare, MonitorPlay,
+  ChevronDown, X, MessageSquare, Bot, WandSparkles,
 } from 'lucide-react'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import { useAuthStore } from '@/store'
 import Avatar from '@/components/ui/Avatar'
 import PlatformChip, { type PlatformKind } from '@/components/ui/PlatformChip'
@@ -15,16 +16,17 @@ import { accountsService } from '@/services/accounts.service'
 const NAV_TOP = [
   { to: '/dashboard',           label: 'Dashboard', icon: LayoutDashboard, exact: true },
   { to: '/dashboard/new-post',  label: 'New Post',  icon: PlusCircle,      kbd: '⌘N' },
-  { to: '/dashboard/preview',   label: 'Preview',   icon: MonitorPlay },
   { to: '/dashboard/calendar',  label: 'Calendar',  icon: CalendarDays },
   { to: '/dashboard/accounts',  label: 'Accounts',  icon: UsersRound },
   { to: '/dashboard/ai-chat',   label: 'AI Menejer',   icon: MessageSquare },
 ]
 
 const NAV_WORKFLOW = [
-  { to: '/dashboard/drafts',    label: 'Drafts',    icon: FileEdit },
-  { to: '/dashboard/approval',  label: 'Approval',  icon: ClipboardCheck },
-  { to: '/dashboard/templates', label: 'Templates', icon: Layers },
+  { to: '/dashboard/drafts',      label: 'Drafts',      icon: FileEdit },
+  { to: '/dashboard/approval',    label: 'Approval',    icon: ClipboardCheck },
+  { to: '/dashboard/templates',   label: 'Templates',   icon: Layers },
+  { to: '/dashboard/autoreply',   label: 'Auto-reply',  icon: Bot },
+  { to: '/dashboard/ai-posts',    label: 'AI Post',     icon: WandSparkles },
 ]
 
 const NAV_BOTTOM = [
@@ -69,7 +71,17 @@ function Logo({ collapsed }: { collapsed: boolean }) {
 export default function Sidebar({ collapsed, setCollapsed, onMobileClose }: Props) {
   const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
+  const refreshUser = useAuthStore((s) => s.refreshUser)
   const location = useLocation()
+
+  // Keep the AI credit balance live — refetch on focus and every 20s.
+  useQuery({
+    queryKey: ['me-credits'],
+    queryFn: async () => { await refreshUser(); return Date.now() },
+    refetchInterval: 20_000,
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
+  })
   const navigate = useNavigate()
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [accountSwitcherOpen, setAccountSwitcherOpen] = useState(false)
@@ -292,17 +304,35 @@ export default function Sidebar({ collapsed, setCollapsed, onMobileClose }: Prop
               <Sparkles size={14} className="text-indigo-400" />
               <span className="text-[11px] uppercase tracking-[0.16em] text-mute">AI credits</span>
             </div>
-            <div className="font-display text-2xl text-ink tnum">
-              1,284<span className="text-faint text-base"> / 2,000</span>
-            </div>
-            <div className="mt-2 h-1.5 rounded-full bg-line2/40 overflow-hidden">
-              <div
-                className="h-full rounded-full"
-                style={{ width: '64%', background: 'linear-gradient(90deg, #6C63FF, #00F5A0)' }}
-              />
-            </div>
-            <button className="mt-3 w-full text-[12px] font-medium text-ink py-1.5 rounded-md bg-surface2 border border-line hover:border-line2 transition">
-              Get more credits
+            {user?.is_admin ? (
+              <div className="font-display text-2xl text-ink tnum">∞<span className="text-faint text-base"> unlimited</span></div>
+            ) : (
+              <>
+                <div className="font-display text-2xl text-ink tnum">
+                  {(user?.ai_credits ?? 2000).toLocaleString()}<span className="text-faint text-base"> / {(user?.ai_credits_limit ?? 2000).toLocaleString()}</span>
+                </div>
+                <div className="mt-2 h-1.5 rounded-full bg-line2/40 overflow-hidden">
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${Math.round(((user?.ai_credits ?? 2000) / (user?.ai_credits_limit ?? 2000)) * 100)}%`,
+                      background: 'linear-gradient(90deg, #6C63FF, #00F5A0)',
+                    }}
+                  />
+                </div>
+              </>
+            )}
+            <button
+              onClick={() => {
+                if (user?.is_admin) {
+                  navigate('/dashboard/admin')
+                } else {
+                  toast.info("Ko'proq kredit uchun administrator bilan bog'laning.")
+                }
+              }}
+              className="mt-3 w-full text-[12px] font-medium text-ink py-1.5 rounded-md bg-surface2 border border-line hover:border-line2 transition"
+            >
+              {user?.is_admin ? 'Manage credits' : 'Get more credits'}
             </button>
           </div>
         </div>

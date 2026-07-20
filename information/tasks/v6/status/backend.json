@@ -1,0 +1,26 @@
+{
+  "agent": "backend",
+  "version": "v6",
+  "status": "done",
+  "tasks_done": [
+    "config.py — fb_app_id/secret/oauth_redirect_uri/graph_version/webhook_verify_token + image_* vars + fb_app_id_resolved/fb_app_secret_resolved/image_default_size_wh properties",
+    ".env.example — V6 Facebook + Image Generation sections added",
+    "app/services/facebook_graph.py — GraphAPIError, exchange_code_for_token, exchange_for_long_lived, get_user_pages, get_me, check_token (190 detect), subscribe_page_webhook, reply_to_comment",
+    "app/routers/facebook_connect.py — oauth/start, oauth/callback (1-page auto / multi-page session+redirect), GET /pages (session, no token in response), POST /select-page",
+    "app/routers/facebook_webhook.py — GET verify (FB_WEBHOOK_VERIFY_TOKEN), POST HMAC+200+enqueue process_facebook_event",
+    "app/services/images/base.py — ImageProvider ABC + ImageResult dataclass",
+    "app/services/images/cloudflare_provider.py — flux-1-schnell, binary/base64 response handling",
+    "app/services/images/pollinations_provider.py — GET prompt endpoint, no key required",
+    "app/services/images/storage.py — save_generated_image to media_dir/ai_generated/{user_id}/{job_id}.png",
+    "app/services/images/router.py — generate_image fallback chain, 429/5xx backoff max 3, key-less skip",
+    "app/schemas/ai_posts.py — CaptionGenerationResult, ImagePromptResult, all request/response schemas",
+    "app/routers/ai_posts.py — 8 endpoints (generate, regenerate-caption, generate-image, image-jobs/{id}, regenerate-image, send-to-composer, list, delete)",
+    "app/main.py — facebook_connect /api/accounts/facebook, facebook_webhook /api/webhooks, ai_posts /api/ai-posts"
+  ],
+  "blockers": [],
+  "verification": {
+    "import_check": "PASS",
+    "pytest_83_tests": "PASS — 83 passed, 0 failed"
+  },
+  "updated_at": "2026-06-11T17:30:00Z"
+}

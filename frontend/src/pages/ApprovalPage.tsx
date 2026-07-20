@@ -107,11 +107,7 @@ export default function ApprovalPage() {
 
   return (
     <div className="page-in px-8 py-6 max-w-4xl">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <div className="text-[10px] uppercase tracking-[0.18em] text-faint mb-1">Workflow</div>
-          <h1 className="font-display text-2xl text-ink">Approval Queue</h1>
-        </div>
+      <div className="flex items-center justify-end mb-6 min-h-[2rem]">
         {posts.length > 0 && (
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-xs text-amber-400">
             <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />

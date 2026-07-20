@@ -7,7 +7,7 @@ interface Props extends PreviewProps {
   postAspect: PostAspect
 }
 
-export default function InstagramPostPreview({ mediaUrl, mediaType, caption, account, postAspect }: Props) {
+export default function InstagramPostPreview({ mediaUrl, mediaType, caption, account }: Props) {
   const username = account?.username || 'your_account'
   const avatar = account?.avatar_url
 
@@ -39,7 +39,7 @@ export default function InstagramPostPreview({ mediaUrl, mediaType, caption, acc
       <MediaFrame
         mediaUrl={mediaUrl}
         mediaType={mediaType}
-        aspectRatio={postAspect === '1:1' ? '1 / 1' : '4 / 5'}
+        aspectRatio="auto"
         bgColor="#f3f4f6"
       />
 

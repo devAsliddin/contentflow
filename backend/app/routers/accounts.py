@@ -265,7 +265,12 @@ async def instagram_login(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Connect Instagram account — stores credentials locally, no API verification."""
+    """Connect Instagram account — performs a real login and stores the session.
+
+    A valid session (ig_session) is required for publishing. If the account has
+    2FA enabled, pass verification_code. Instagram may still require a one-time
+    approval from the phone for logins from a new device/IP.
+    """
     count_result = await db.execute(
         select(func.count()).where(
             Account.user_id == current_user.id,
@@ -276,9 +281,34 @@ async def instagram_login(
     if count_result.scalar_one() >= MAX_ACCOUNTS_PER_PLATFORM:
         raise HTTPException(status_code=400, detail=f"Maximum {MAX_ACCOUNTS_PER_PLATFORM} Instagram accounts allowed")
 
+    # Real Instagram login (instagrapi). Runs in a thread — it's blocking I/O.
+    import asyncio
+    from app.services.instagram_service import (
+        instagram_login as ig_login,
+        InstagramTwoFactorRequired,
+    )
+    try:
+        login_result = await asyncio.to_thread(
+            ig_login, data.username, data.password, data.verification_code
+        )
+    except InstagramTwoFactorRequired:
+        # Signal the frontend to reveal the 2FA code field — only asked when needed.
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "two_factor_required",
+                "message": "This account has 2FA. Enter the 6-digit code from your authenticator app or SMS.",
+            },
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     credentials = {
-        "ig_username": data.username,
-        "ig_password": data.password,
+        "ig_username": login_result["username"],
+        "ig_user_id": login_result["user_id"],
+        # Session dict — post_to_instagram_session passes it to cl.set_settings(),
+        # and verify_instagram_session accepts a dict or a JSON string.
+        "ig_session": login_result["session"],
     }
     encrypted = encrypt_credentials(credentials)
 
@@ -286,8 +316,9 @@ async def instagram_login(
     account = Account(
         user_id=current_user.id,
         platform="instagram",
-        account_name=data.account_name or data.username,
+        account_name=data.account_name or login_result["username"],
         credentials=encrypted,
+        ig_user_id=login_result["user_id"],
         oauth_migrated=True,
         oauth_migrated_at=datetime.now(tz.utc),
     )
@@ -384,7 +415,7 @@ async def telegram_add_channel(
     if not await _fetch_telegram_bot_info(bot_token):
         raise HTTPException(
             status_code=400,
-            detail="Bot token yaroqsiz yoki BotFather orqali yangilangan. Avval tokenni yangilang.",
+            detail="Invalid bot token. Please check your Telegram bot configuration.",
         )
 
     rows = await _telegram_rows_for_bot(db, current_user.id, bot_token)
@@ -399,7 +430,7 @@ async def telegram_add_channel(
     except Exception as e:
         raise HTTPException(
             status_code=400,
-            detail=f"Kanal topilmadi yoki bot admin emas: {e}",
+            detail="Channel not found or bot does not have admin access",
         )
 
     label = (data.label or "").strip()
@@ -440,7 +471,7 @@ async def telegram_update_bot_token(
 
     bot = await _fetch_telegram_bot_info(new_token)
     if not bot:
-        raise HTTPException(status_code=400, detail="Bot token yaroqsiz")
+        raise HTTPException(status_code=400, detail="Invalid bot token")
 
     source_credentials = decrypt_credentials(source.credentials)
     old_token = source_credentials.get("bot_token")

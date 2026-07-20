@@ -12,11 +12,12 @@ interface AuthState {
   register: (email: string, password: string, fullName?: string) => Promise<void>
   logout: () => void
   setTokens: (access: string, refresh: string, user: User) => void
+  refreshUser: () => Promise<void>
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
       accessToken: null,
       refreshToken: null,
@@ -56,6 +57,15 @@ export const useAuthStore = create<AuthState>()(
         localStorage.removeItem('access_token')
         localStorage.removeItem('refresh_token')
         set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false })
+      },
+
+      // Pull the latest user (incl. live AI credit balance) from the server.
+      refreshUser: async () => {
+        if (!get().isAuthenticated) return
+        try {
+          const { data } = await api.get('/auth/me')
+          set({ user: data })
+        } catch { /* ignore — token refresh / 401 handled by interceptor */ }
       },
     }),
     {

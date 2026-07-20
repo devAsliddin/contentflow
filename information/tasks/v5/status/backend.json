@@ -1,0 +1,18 @@
+{
+  "agent": "backend",
+  "version": "v5",
+  "status": "done",
+  "tasks_done": [
+    "config_ai_settings",
+    "env_example_update",
+    "services_ai_package",
+    "services_instagram_insights",
+    "services_analysis_stats",
+    "schemas_analysis",
+    "routers_analysis",
+    "instagram_connect_scope",
+    "instagram_connect_trigger"
+  ],
+  "blockers": [],
+  "updated_at": "2026-06-10T15:00:00Z"
+}

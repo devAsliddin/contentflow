@@ -30,7 +30,7 @@ export default function LinkedInPreview({ mediaUrl, mediaType, caption, account 
 
       {/* Media */}
       {mediaUrl && (
-        <MediaFrame mediaUrl={mediaUrl} mediaType={mediaType} aspectRatio="16 / 9" bgColor="#f3f2ef" />
+        <MediaFrame mediaUrl={mediaUrl} mediaType={mediaType} aspectRatio="auto" bgColor="#f3f2ef" />
       )}
 
       {/* Reactions */}

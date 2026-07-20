@@ -1,4 +1,5 @@
 """V2 Workflow endpoints: status transitions, recycle, bulk upload, templates, OAuth migration."""
+import asyncio
 import uuid
 import logging
 from datetime import datetime, timezone
@@ -24,6 +25,39 @@ settings = get_settings()
 
 router = APIRouter()
 
+# Detached, best-effort Celery interactions. apply_async()/control.revoke() are
+# blocking broker I/O; running them inline froze the request ~20s when the
+# broker was down. The post is persisted before these fire, and the beat task
+# `recover_missed_posts` publishes any scheduled post once due — so detaching
+# never loses work. Keep strong refs so tasks aren't GC'd mid-flight.
+_bg_tasks: set = set()
+
+
+def _detach(coro) -> None:
+    task = asyncio.create_task(coro)
+    _bg_tasks.add(task)
+    task.add_done_callback(_bg_tasks.discard)
+
+
+async def _enqueue_schedule(post_id: str, eta) -> None:
+    try:
+        from app.tasks.post_tasks import schedule_post
+        await asyncio.to_thread(schedule_post.apply_async, args=[post_id], eta=eta)
+    except Exception:
+        logger.warning(
+            "Background enqueue of post %s failed (broker slow/down); "
+            "beat recovery will publish it once due",
+            post_id,
+        )
+
+
+async def _revoke_task(task_id: str) -> None:
+    try:
+        from app.tasks.celery_app import celery_app
+        await asyncio.to_thread(celery_app.control.revoke, task_id, terminate=True)
+    except Exception:
+        logger.warning("Could not revoke Celery task %s (broker slow/down)", task_id)
+
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
 ALLOWED_VIDEO_TYPES = {"video/mp4", "video/quicktime"}
 MAX_IMAGE_SIZE = 20 * 1024 * 1024
@@ -32,6 +66,9 @@ EXT_MAP = {
     "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp",
     "video/mp4": ".mp4", "video/quicktime": ".mov",
 }
+
+# Reuse the same magic-bytes validation from upload.py
+from app.routers.upload import _validate_magic  # noqa: E402
 
 VALID_TRANSITIONS: dict[str, list[str]] = {
     "draft": ["pending_review", "scheduled"],
@@ -49,6 +86,10 @@ VALID_TRANSITIONS: dict[str, list[str]] = {
 class StatusTransitionRequest(BaseModel):
     status: str = Field(..., description="Target status")
     scheduled_at: datetime | None = Field(default=None)
+
+
+# Statuses that require admin approval — users cannot self-promote to these
+_ADMIN_ONLY_STATUSES = {"approved", "published"}
 
 
 @router.put("/posts/{post_id}/status", response_model=PostOut)
@@ -70,11 +111,20 @@ async def transition_post_status(
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
 
+    # Validate the transition first — an impossible transition is a 400 regardless
+    # of who requests it (e.g. draft → published is never allowed for anyone).
     allowed = VALID_TRANSITIONS.get(post.status, [])
     if data.status not in allowed:
         raise HTTPException(
             status_code=400,
             detail=f"Cannot transition from '{post.status}' to '{data.status}'. Allowed: {allowed}",
+        )
+
+    # For otherwise-valid transitions, approving or publishing requires admin.
+    if data.status in _ADMIN_ONLY_STATUSES and not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Only admins can approve or publish posts",
         )
 
     post.status = data.status
@@ -85,16 +135,11 @@ async def transition_post_status(
         if data.scheduled_at <= datetime.now(timezone.utc):
             raise HTTPException(status_code=400, detail="scheduled_at must be in the future")
         post.scheduled_at = data.scheduled_at
-        # Re-schedule Celery task
+        # Re-schedule Celery task (detached — never blocks the request)
         if post.celery_task_id:
-            try:
-                from app.tasks.celery_app import celery_app
-                celery_app.control.revoke(post.celery_task_id, terminate=True)
-            except Exception:
-                pass
-        from app.tasks.post_tasks import schedule_post
-        task = schedule_post.apply_async(args=[str(post.id)], eta=data.scheduled_at)
-        post.celery_task_id = task.id
+            _detach(_revoke_task(post.celery_task_id))
+            post.celery_task_id = None
+        _detach(_enqueue_schedule(str(post.id), data.scheduled_at))
 
     db.add(post)
     await db.flush()
@@ -157,12 +202,8 @@ async def recycle_post(
     await db.flush()
     await db.refresh(new_post)
 
-    from app.tasks.post_tasks import schedule_post
-    task = schedule_post.apply_async(args=[str(new_post.id)], eta=scheduled_at)
-    new_post.celery_task_id = task.id
-    db.add(new_post)
-    await db.flush()
-    await db.refresh(new_post)
+    # Detached — never blocks the request on the broker.
+    _detach(_enqueue_schedule(str(new_post.id), scheduled_at))
 
     return PostOut.model_validate(new_post)
 
@@ -225,6 +266,15 @@ async def bulk_upload_media(
                     url="", filename=file.filename or "unknown",
                     media_type=media_type, size_bytes=size,
                     error=f"File too large. Max {limit_mb}MB",
+                ))
+                failed += 1
+                continue
+
+            if not _validate_magic(contents, content_type):
+                items.append(BulkUploadItem(
+                    url="", filename=file.filename or "unknown",
+                    media_type=media_type, size_bytes=size,
+                    error="File content does not match declared type",
                 ))
                 failed += 1
                 continue

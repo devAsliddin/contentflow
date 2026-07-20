@@ -1,29 +1,54 @@
+import { useState } from 'react'
+
 interface MediaFrameProps {
   mediaUrl?: string
   mediaType?: 'image' | 'video'
+  // A fixed CSS aspect-ratio (e.g. "9 / 16"), or "auto" to follow the actual
+  // media's natural aspect ratio so a cropped image is shown as-is (no re-crop).
   aspectRatio: string
   bgColor?: string
   className?: string
 }
 
 export function MediaFrame({ mediaUrl, mediaType, aspectRatio, bgColor = '#111', className = '' }: MediaFrameProps) {
+  const auto = aspectRatio === 'auto'
+  // When in auto mode, measure the loaded media so the frame matches it exactly.
+  const [naturalAspect, setNaturalAspect] = useState<string | undefined>(undefined)
+
+  // In auto mode the frame already matches the media's ratio, so object-contain
+  // shows the whole image without cropping (and avoids letterboxing once sized).
+  const fit = auto ? 'object-contain' : 'object-cover'
+  const effectiveAspect = auto ? (naturalAspect ?? '1 / 1') : aspectRatio
+
   return (
     <div
       className={`w-full overflow-hidden ${className}`}
-      style={{ aspectRatio, background: bgColor }}
+      style={{ aspectRatio: effectiveAspect, background: bgColor }}
     >
       {mediaUrl ? (
         mediaType === 'video' ? (
           <video
             src={mediaUrl}
-            className="w-full h-full object-cover"
+            className={`w-full h-full ${fit}`}
             muted
             loop
             autoPlay
             playsInline
+            onLoadedMetadata={auto ? (e) => {
+              const v = e.currentTarget
+              if (v.videoWidth && v.videoHeight) setNaturalAspect(`${v.videoWidth} / ${v.videoHeight}`)
+            } : undefined}
           />
         ) : (
-          <img src={mediaUrl} alt="preview" className="w-full h-full object-cover" />
+          <img
+            src={mediaUrl}
+            alt="preview"
+            className={`w-full h-full ${fit}`}
+            onLoad={auto ? (e) => {
+              const img = e.currentTarget
+              if (img.naturalWidth && img.naturalHeight) setNaturalAspect(`${img.naturalWidth} / ${img.naturalHeight}`)
+            } : undefined}
+          />
         )
       ) : (
         <div
@@ -32,7 +57,7 @@ export function MediaFrame({ mediaUrl, mediaType, aspectRatio, bgColor = '#111',
         >
           <div className="text-center opacity-30">
             <div className="text-4xl mb-2">🖼</div>
-            <div className="text-xs font-mono text-white">{aspectRatio.replace(' / ', ':')}</div>
+            <div className="text-xs font-mono text-white">{auto ? 'auto' : aspectRatio.replace(' / ', ':')}</div>
           </div>
         </div>
       )}

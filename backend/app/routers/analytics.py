@@ -97,6 +97,60 @@ async def get_by_platform(
 # ─── V2 Analytics ─────────────────────────────────────────────────────────────
 
 
+async def _instagram_metrics_map(db: AsyncSession, posts: list) -> dict:
+    """Best-effort REAL Instagram engagement for the given published posts.
+
+    Returns {post_id: {likes, views, reach, comments}}. Empty if no IG sessions
+    or the live fetch fails — callers fall back to placeholder values.
+    """
+    import asyncio
+    from app.models.post import PostLog
+    from app.services.encryption import decrypt_credentials
+    from app.services.instagram_service import fetch_media_metrics
+
+    post_ids = [p.id for p in posts]
+    if not post_ids:
+        return {}
+
+    # Successful Instagram publish logs hold the media pk (external_id).
+    logs_result = await db.execute(
+        select(PostLog).where(
+            PostLog.post_id.in_(post_ids),
+            PostLog.platform == "instagram",
+            PostLog.status == "success",
+            PostLog.external_id.isnot(None),
+        )
+    )
+    logs = logs_result.scalars().all()
+    if not logs:
+        return {}
+
+    account_ids = {log.account_id for log in logs if log.account_id}
+    sessions: dict = {}
+    if account_ids:
+        acc_result = await db.execute(select(Account).where(Account.id.in_(account_ids)))
+        for acc in acc_result.scalars().all():
+            try:
+                creds = decrypt_credentials(acc.credentials)
+                if creds.get("ig_session"):
+                    sessions[acc.id] = creds["ig_session"]
+            except Exception:  # noqa: BLE001
+                continue
+
+    items = [
+        (str(log.post_id), log.external_id, sessions.get(log.account_id))
+        for log in logs
+        if sessions.get(log.account_id)
+    ]
+    if not items:
+        return {}
+
+    try:
+        return await asyncio.to_thread(fetch_media_metrics, items)
+    except Exception:  # noqa: BLE001
+        return {}
+
+
 def _placeholder_metrics(post_id: str, platform: str) -> dict:
     """Return deterministic placeholder engagement metrics seeded from post_id."""
     seed = sum(ord(c) for c in str(post_id))
@@ -151,6 +205,9 @@ async def get_posts_performance(
     result = await db.execute(query)
     posts = result.scalars().all()
 
+    # Pull REAL Instagram metrics for published IG posts (best effort).
+    real_metrics = await _instagram_metrics_map(db, posts)
+
     items = []
     for post in posts:
         post_platforms = [p.split(":")[0] for p in (post.platforms or [])]
@@ -164,7 +221,8 @@ async def get_posts_performance(
         if platform:
             primary_platform = platform
 
-        metrics = _placeholder_metrics(str(post.id), primary_platform)
+        # Real metrics when we have them (Instagram), else placeholder fallback.
+        metrics = real_metrics.get(str(post.id)) or _placeholder_metrics(str(post.id), primary_platform)
 
         items.append({
             "post_id": str(post.id),
@@ -173,6 +231,7 @@ async def get_posts_performance(
             "likes": metrics["likes"],
             "views": metrics["views"],
             "reach": metrics["reach"],
+            "comments": metrics.get("comments", 0),
             "published_at": post.updated_at.isoformat() if post.updated_at else post.created_at.isoformat(),
         })
 

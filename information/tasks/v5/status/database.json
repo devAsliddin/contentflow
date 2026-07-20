@@ -1,0 +1,1 @@
+{ "agent": "database", "version": "v5", "status": "done", "tasks_done": ["analysis.py models (7 tables)", "alembic 008 migration", "models/__init__.py exports"], "blockers": [], "updated_at": "2026-06-10T14:15:00Z" }

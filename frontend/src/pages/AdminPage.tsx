@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import {
-  Users, LayoutGrid, FileText, Link2,
-  ShieldCheck, ShieldOff, Trash2, ToggleLeft, ToggleRight, Loader2,
+  Users, LayoutGrid, FileText, Link2, Sparkles,
+  ShieldCheck, ShieldOff, Trash2, ToggleLeft, ToggleRight, Loader2, Coins, X,
 } from 'lucide-react'
 import { adminService, type AdminStats, type AdminUser } from '@/services/admin.service'
 import { useAuthStore } from '@/store'
@@ -44,12 +44,93 @@ function StatusDot({ active }: { active: boolean }) {
   )
 }
 
+function CreditsModal({ user, onClose, onSaved }: {
+  user: AdminUser
+  onClose: () => void
+  onSaved: (u: AdminUser) => void
+}) {
+  const [credits, setCredits] = useState(user.ai_credits)
+  const [limit, setLimit] = useState(user.ai_credits_limit)
+  const [add, setAdd] = useState(0)
+  const [saving, setSaving] = useState(false)
+
+  async function save() {
+    setSaving(true)
+    try {
+      // If an "add" amount was entered, apply it; otherwise set absolute values.
+      const updated = add !== 0
+        ? await adminService.adjustCredits(user.id, { amount: add, limit })
+        : await adminService.adjustCredits(user.id, { set_to: credits, limit })
+      onSaved(updated)
+      toast.success(`${updated.email} · ${updated.ai_credits.toLocaleString()} kredit`)
+      onClose()
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail || 'Saqlash muvaffaqiyatsiz')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="bg-surface border border-line rounded-2xl shadow-2xl w-full max-w-[380px]" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-line">
+          <div className="flex items-center gap-2">
+            <Coins size={16} className="text-indigo-400" />
+            <span className="font-display text-base text-ink">AI kreditlar</span>
+          </div>
+          <button onClick={onClose} className="text-mute hover:text-ink transition p-1"><X size={16} /></button>
+        </div>
+        <div className="p-5 space-y-4">
+          <div className="text-xs text-mute truncate">{user.full_name || user.email}</div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <div className="text-[10px] uppercase text-faint mb-1">Balans</div>
+              <input type="number" value={credits} onChange={(e) => { setCredits(Math.max(0, Number(e.target.value))); setAdd(0) }}
+                className="w-full px-3 py-2 rounded-lg bg-bg border border-line text-ink text-sm focus:outline-none focus:border-indigo-500/60" />
+            </div>
+            <div>
+              <div className="text-[10px] uppercase text-faint mb-1">Limit</div>
+              <input type="number" value={limit} onChange={(e) => setLimit(Math.max(0, Number(e.target.value)))}
+                className="w-full px-3 py-2 rounded-lg bg-bg border border-line text-ink text-sm focus:outline-none focus:border-indigo-500/60" />
+            </div>
+          </div>
+
+          <div>
+            <div className="text-[10px] uppercase text-faint mb-1">Yoki qo'shish / ayirish (±)</div>
+            <div className="flex items-center gap-2">
+              <input type="number" value={add} onChange={(e) => setAdd(Number(e.target.value))}
+                className="flex-1 px-3 py-2 rounded-lg bg-bg border border-line text-ink text-sm focus:outline-none focus:border-indigo-500/60" />
+              {[100, 500, 1000].map((n) => (
+                <button key={n} onClick={() => setAdd((v) => v + n)}
+                  className="px-2 py-2 rounded-lg border border-line text-xs text-mute hover:text-ink hover:border-line2 transition">
+                  +{n}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-line">
+          <button onClick={onClose} className="px-4 py-1.5 rounded-xl border border-line text-sm text-ink hover:bg-surface2 transition">Bekor</button>
+          <button onClick={save} disabled={saving}
+            className="px-4 py-1.5 rounded-xl bg-indigo-500 text-white text-sm font-medium hover:bg-indigo-400 transition flex items-center gap-1.5 disabled:opacity-60">
+            {saving ? <Loader2 size={13} className="animate-spin" /> : <Coins size={13} />}
+            Saqlash
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function AdminPage() {
   const currentUser = useAuthStore((s) => s.user)
   const [stats, setStats] = useState<AdminStats | null>(null)
   const [users, setUsers] = useState<AdminUser[]>([])
   const [loading, setLoading] = useState(true)
   const [actionId, setActionId] = useState<string | null>(null)
+  const [creditUser, setCreditUser] = useState<AdminUser | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -130,11 +211,12 @@ export default function AdminPage() {
 
       {/* Stats */}
       {stats && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <StatCard icon={Users}      label="Total users"    value={stats.total_users}    color="#6C63FF" />
-          <StatCard icon={LayoutGrid} label="Active users"   value={stats.active_users}   color="#00F5A0" />
-          <StatCard icon={FileText}   label="Total posts"    value={stats.total_posts}    color="#FFB347" />
-          <StatCard icon={Link2}      label="Accounts"       value={stats.total_accounts} color="#5BE8FF" />
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+          <StatCard icon={Users}      label="Total users"    value={stats.total_users}        color="#6C63FF" />
+          <StatCard icon={LayoutGrid} label="Active users"   value={stats.active_users}       color="#00F5A0" />
+          <StatCard icon={FileText}   label="Total posts"    value={stats.total_posts}        color="#FFB347" />
+          <StatCard icon={Link2}      label="Accounts"       value={stats.total_accounts}     color="#5BE8FF" />
+          <StatCard icon={Sparkles}   label="Credits used"   value={stats.total_credits_used} color="#FF6BD6" />
         </div>
       )}
 
@@ -151,6 +233,7 @@ export default function AdminPage() {
                 <th className="text-left px-5 py-3 text-[10px] uppercase tracking-[0.12em] text-faint font-medium">User</th>
                 <th className="text-left px-4 py-3 text-[10px] uppercase tracking-[0.12em] text-faint font-medium">Status</th>
                 <th className="text-left px-4 py-3 text-[10px] uppercase tracking-[0.12em] text-faint font-medium">Role</th>
+                <th className="text-left px-4 py-3 text-[10px] uppercase tracking-[0.12em] text-faint font-medium">Credits</th>
                 <th className="text-left px-4 py-3 text-[10px] uppercase tracking-[0.12em] text-faint font-medium">Joined</th>
                 <th className="text-right px-5 py-3 text-[10px] uppercase tracking-[0.12em] text-faint font-medium">Actions</th>
               </tr>
@@ -186,11 +269,38 @@ export default function AdminPage() {
                     <td className="px-4 py-3.5">
                       <RoleBadge isAdmin={user.is_admin} />
                     </td>
+                    <td className="px-4 py-3.5">
+                      {user.is_admin ? (
+                        <span className="text-[11px] text-indigo-400">∞ unlimited</span>
+                      ) : (
+                        <div className="flex items-center gap-2 min-w-[110px]">
+                          <span className="text-xs text-ink tnum">{user.ai_credits.toLocaleString()}</span>
+                          <span className="text-[10px] text-faint tnum">/ {user.ai_credits_limit.toLocaleString()}</span>
+                          <div className="flex-1 h-1 rounded-full bg-line2/40 overflow-hidden min-w-[28px]">
+                            <div className="h-full rounded-full"
+                              style={{
+                                width: `${Math.min(100, Math.round((user.ai_credits / Math.max(1, user.ai_credits_limit)) * 100))}%`,
+                                background: 'linear-gradient(90deg,#6C63FF,#00F5A0)',
+                              }} />
+                          </div>
+                        </div>
+                      )}
+                    </td>
                     <td className="px-4 py-3.5 text-mute text-xs tnum">
                       {new Date(user.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
                     </td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center justify-end gap-1">
+                        {/* Edit credits */}
+                        <button
+                          onClick={() => setCreditUser(user)}
+                          disabled={busy}
+                          title="Kreditlarni boshqarish"
+                          className="p-1.5 rounded-lg text-mute hover:text-indigo-400 hover:bg-surface2 transition disabled:opacity-30"
+                        >
+                          <Coins size={14} />
+                        </button>
+
                         {/* Toggle active */}
                         <button
                           onClick={() => toggleActive(user)}
@@ -236,6 +346,14 @@ export default function AdminPage() {
           )}
         </div>
       </div>
+
+      {creditUser && (
+        <CreditsModal
+          user={creditUser}
+          onClose={() => setCreditUser(null)}
+          onSaved={(u) => setUsers((prev) => prev.map((x) => (x.id === u.id ? u : x)))}
+        />
+      )}
     </div>
   )
 }

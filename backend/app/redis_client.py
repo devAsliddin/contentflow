@@ -14,5 +14,11 @@ def get_redis() -> aioredis.Redis:
             settings.redis_url,
             encoding="utf-8",
             decode_responses=True,
+            # Fail fast when Redis is unreachable instead of blocking each
+            # request ~4s on the connect. Callers already treat cache/state
+            # access as best-effort (try/except), so a quick failure just
+            # degrades gracefully.
+            socket_connect_timeout=2,
+            socket_timeout=2,
         )
     return redis_client

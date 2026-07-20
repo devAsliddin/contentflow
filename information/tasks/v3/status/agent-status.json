@@ -1,0 +1,21 @@
+{
+  "version": "3",
+  "milestone": "Post Preview & Platform Mockup System",
+  "tasks": [
+    { "id": "v3-fe-001", "name": "ContentTypeSelector", "owner": "frontend", "status": "done" },
+    { "id": "v3-fe-002", "name": "MediaUploader", "owner": "frontend", "status": "done" },
+    { "id": "v3-fe-003", "name": "InstagramPostPreview", "owner": "frontend", "status": "done" },
+    { "id": "v3-fe-004", "name": "InstagramStoryPreview", "owner": "frontend", "status": "done" },
+    { "id": "v3-fe-005", "name": "TikTokPreview", "owner": "frontend", "status": "done" },
+    { "id": "v3-fe-006", "name": "TelegramPreview", "owner": "frontend", "status": "done" },
+    { "id": "v3-fe-007", "name": "FacebookPreview", "owner": "frontend", "status": "done" },
+    { "id": "v3-fe-008", "name": "LinkedInPreview", "owner": "frontend", "status": "done" },
+    { "id": "v3-fe-009", "name": "YouTubePreview", "owner": "frontend", "status": "done" },
+    { "id": "v3-fe-010", "name": "XTwitterPreview", "owner": "frontend", "status": "done" },
+    { "id": "v3-fe-011", "name": "PreviewSwitcher", "owner": "frontend", "status": "done" },
+    { "id": "v3-fe-012", "name": "PreviewScreen container", "owner": "frontend", "status": "done" },
+    { "id": "v3-fe-013", "name": "Route /dashboard/preview", "owner": "frontend", "status": "done" },
+    { "id": "v3-be-001", "name": "GET /api/v1/accounts/connected", "owner": "backend", "status": "done" }
+  ],
+  "updated_at": "2026-05-31"
+}

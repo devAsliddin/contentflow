@@ -35,11 +35,18 @@ async def _call_openrouter_chat(
         "HTTP-Referer": settings.frontend_url,
         "X-Title": "ContentFlow",
     }
+    resolved_model = _openrouter_model(model)
     payload = {
-        "model": _openrouter_model(model),
+        "model": resolved_model,
         "messages": messages,
         "stream": False,
     }
+    # gpt-oss is a reasoning model: at the default effort it spends the whole
+    # token budget on chain-of-thought, which made simple calls (e.g. caption
+    # generation) take ~40s. Low effort keeps answer quality but cuts latency
+    # to ~5s. OpenRouter ignores this field for models that don't support it.
+    if "gpt-oss" in resolved_model:
+        payload["reasoning"] = {"effort": "low"}
 
     async with httpx.AsyncClient(timeout=timeout) as client:
         resp = await client.post(
@@ -49,10 +56,7 @@ async def _call_openrouter_chat(
         )
 
     if resp.status_code != 200:
-        detail = f"OpenRouter xatosi: {resp.status_code}"
-        if include_error_body:
-            detail += f" - {resp.text[:200]}"
-        raise HTTPException(status_code=502, detail=detail)
+        raise HTTPException(status_code=502, detail="AI service request failed")
 
     data = resp.json()
     return data["choices"][0]["message"]["content"]
@@ -122,7 +126,7 @@ async def call_ollama_chat(
 
     raise HTTPException(
         status_code=502,
-        detail="AI xizmati mavjud emas. Ollama ishlamayapti va OpenRouter ham javob bermadi.",
+        detail="AI service is currently unavailable",
     )
 
 
@@ -155,8 +159,8 @@ async def call_ollama_vision(
         if resp.status_code != 200:
             raise HTTPException(
                 status_code=502,
-                detail=f"Vision model xatosi: {resp.status_code} - {resp.text[:300]}",
+                detail="AI vision service request failed",
             )
         return resp.json()["message"]["content"]
     except httpx.ConnectError:
-        raise HTTPException(status_code=503, detail="Ollama ishlamayapti. Terminalda: ollama serve")
+        raise HTTPException(status_code=503, detail="AI service is currently unavailable")

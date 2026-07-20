@@ -1,0 +1,17 @@
+{
+  "agent": "celery",
+  "version": "v5",
+  "status": "done",
+  "tasks_done": [
+    "analysis_tasks.py yaratildi",
+    "run_initial_analysis (contentflow.run_initial_analysis) — orkestr task, queue=analysis",
+    "classify_captions bosqichi — chunked vLLM/Groq, CaptionClassification upsert",
+    "generate_account_profile bosqichi — versioned AccountProfile, AccountProfileSchema validatsiya",
+    "generate_recommendations bosqichi — RecommendationsSchema, week_start upsert",
+    "daily_account_snapshot beat task (contentflow.daily_account_snapshot) — 03:30 UTC",
+    "weekly_refresh beat task (contentflow.weekly_refresh) — Monday 04:00 UTC, 60s stagger",
+    "celery_app.py: analysis_tasks include qo'shildi, 2 yangi beat_schedule yozuvi"
+  ],
+  "blockers": [],
+  "updated_at": "2026-06-10T14:30:00Z"
+}

@@ -9,17 +9,14 @@ logger = logging.getLogger(__name__)
 
 
 def _telegram_error(data: dict) -> str:
-    description = data.get("description", "Noma'lum xato")
+    description = data.get("description", "Unknown error")
     if description == "Unauthorized" or data.get("error_code") == 401:
-        return (
-            "Bot token yaroqsiz yoki BotFather orqali yangilangan. "
-            "Accounts sahifasidagi Bot sozlamalari orqali tokenni yangilang."
-        )
+        return "Invalid bot token. Please update the token in your account settings."
     if "not enough rights" in description.lower() or "administrator" in description.lower():
-        return "Bot kanalga admin qilingan, lekin post yuborish huquqi yo'q."
+        return "Bot does not have sufficient admin rights to post to this channel."
     if "chat not found" in description.lower():
-        return "Kanal topilmadi. @username yoki -100... kanal ID ni tekshiring."
-    return description
+        return "Channel not found. Please check the channel ID or username."
+    return "Telegram API error"
 
 
 async def verify_telegram_bot(bot_token: str) -> bool:

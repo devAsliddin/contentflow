@@ -1,19 +1,23 @@
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { Search, Bell, Plus, Sun, Moon } from 'lucide-react'
 import { useAuthStore, useUIStore } from '@/store'
 
 const TITLES: Record<string, { eyebrow: string; title: string }> = {
-  '/':           { eyebrow: 'Home',      title: 'Good evening' },
-  '/new-post':   { eyebrow: 'Compose',   title: 'New post' },
-  '/calendar':   { eyebrow: 'Schedule',  title: 'Content calendar' },
-  '/accounts':   { eyebrow: 'Network',   title: 'Connected accounts' },
-  '/ai-chat':    { eyebrow: 'AI',        title: 'AI SMM menejer' },
-  '/analytics':  { eyebrow: 'Insights',  title: 'Analytics' },
-  '/settings':   { eyebrow: 'Workspace', title: 'Settings' },
-  '/admin':      { eyebrow: 'System',    title: 'Admin panel' },
-  '/drafts':     { eyebrow: 'Workflow',  title: 'Draft queue' },
-  '/approval':   { eyebrow: 'Workflow',  title: 'Approval queue' },
-  '/templates':  { eyebrow: 'Content',   title: 'Template library' },
+  '/dashboard':            { eyebrow: 'Home',      title: 'Good evening' },
+  '/dashboard/new-post':   { eyebrow: 'Compose',   title: 'New post' },
+  '/dashboard/calendar':   { eyebrow: 'Schedule',  title: 'Content calendar' },
+  '/dashboard/accounts':   { eyebrow: 'Network',   title: 'Connected accounts' },
+  '/dashboard/ai-chat':    { eyebrow: 'AI',        title: 'AI SMM Menejer' },
+  '/dashboard/analytics':  { eyebrow: 'Insights',  title: 'Analytics' },
+  '/dashboard/settings':   { eyebrow: 'Workspace', title: 'Settings' },
+  '/dashboard/admin':      { eyebrow: 'System',    title: 'Admin panel' },
+  '/dashboard/drafts':     { eyebrow: 'Workflow',  title: 'Draft queue' },
+  '/dashboard/approval':   { eyebrow: 'Workflow',  title: 'Approval queue' },
+  '/dashboard/templates':  { eyebrow: 'Content',   title: 'Template library' },
+  '/dashboard/autoreply':  { eyebrow: 'Engage',    title: 'Avtomatik javob' },
+  '/dashboard/ai-posts':   { eyebrow: 'AI Studio', title: 'AI Post Drafts' },
+  '/dashboard/ai-posts/create': { eyebrow: 'AI Studio', title: 'AI post yaratish' },
 }
 
 function getGreeting() {
@@ -29,12 +33,38 @@ export default function TopBar() {
   const user = useAuthStore((s) => s.user)
   const theme = useUIStore((s) => s.theme)
   const toggleTheme = useUIStore((s) => s.toggleTheme)
+  const searchRef = useRef<HTMLInputElement>(null)
+  const [searchQuery, setSearchQuery] = useState('')
 
-  const meta = TITLES[location.pathname] || TITLES['/']
-  const isDashboard = location.pathname === '/'
+  const meta = TITLES[location.pathname] || TITLES['/dashboard']
+  const isDashboard = location.pathname === '/dashboard'
   const title = isDashboard
     ? `${getGreeting()}, ${user?.full_name?.split(' ')[0] || 'there'}`
     : meta.title
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        searchRef.current?.focus()
+        searchRef.current?.select()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
+  function handleSearchSubmit(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter' && searchQuery.trim()) {
+      navigate(`/dashboard/drafts?q=${encodeURIComponent(searchQuery.trim())}`)
+      setSearchQuery('')
+      searchRef.current?.blur()
+    }
+    if (e.key === 'Escape') {
+      setSearchQuery('')
+      searchRef.current?.blur()
+    }
+  }
 
   return (
     <header className="sticky top-0 z-30 bg-bg/70 backdrop-blur-xl border-b border-line">
@@ -47,10 +77,14 @@ export default function TopBar() {
           </h1>
         </div>
 
-        <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface border border-line text-mute w-72">
+        <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface border border-line text-mute w-72 focus-within:border-indigo-500/50 transition">
           <Search size={14} />
           <input
+            ref={searchRef}
             type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={handleSearchSubmit}
             placeholder="Search posts, drafts, captions…"
             className="bg-transparent flex-1 text-sm focus:outline-none placeholder:text-faint text-ink"
           />
@@ -72,7 +106,7 @@ export default function TopBar() {
         </button>
 
         <button
-          onClick={() => navigate('/new-post')}
+          onClick={() => navigate('/dashboard/new-post')}
           className="inline-flex items-center gap-2 px-3.5 py-2 text-sm rounded-lg font-medium transition ring-focus bg-indigo-500 text-white hover:bg-indigo-400 shadow-glow-indigo"
         >
           <Plus size={14} />
