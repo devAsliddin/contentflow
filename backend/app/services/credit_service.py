@@ -11,6 +11,7 @@ Admins are unlimited (never charged).
 import logging
 
 from fastapi import HTTPException, status
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
@@ -62,17 +63,32 @@ async def consume(db: AsyncSession, user: User, feature: str, units: int = 1) ->
 
     Raises ``InsufficientCreditsError`` (HTTP 402) when the balance is too low.
     Admins are never charged.
+
+    The deduction is a single conditional UPDATE (WHERE ai_credits >= cost)
+    rather than check-then-write on the in-memory ``user`` object: two
+    concurrent requests from the same user (e.g. two chat tabs, or a
+    double-click) both reading the same starting balance could otherwise
+    both pass the check and both deduct, letting the balance go negative.
+    The UPDATE is atomic at the database level regardless of concurrency.
     """
     cost = cost_for(feature) * max(1, units)
     if user.is_admin:
         return user.ai_credits
 
-    if user.ai_credits < cost:
+    result = await db.execute(
+        update(User)
+        .where(User.id == user.id, User.ai_credits >= cost)
+        .values(ai_credits=User.ai_credits - cost)
+        .returning(User.ai_credits)
+    )
+    row = result.first()
+    if row is None:
+        # Either genuinely insufficient, or another concurrent request just
+        # spent the balance first — re-read for an accurate error message.
+        await db.refresh(user)
         raise InsufficientCreditsError(cost, user.ai_credits)
 
-    user.ai_credits -= cost
-    db.add(user)
-    await db.flush()
+    user.ai_credits = row[0]
     logger.info(
         "credits: user=%s -%d (%s) remaining=%d", user.id, cost, feature, user.ai_credits
     )
