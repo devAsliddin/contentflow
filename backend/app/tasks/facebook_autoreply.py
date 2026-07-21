@@ -416,6 +416,7 @@ async def _rate_ok(account_id) -> bool:
             await redis.expire(key, 3600)
         return count <= FB_PAGE_HOURLY_LIMIT
     finally:
+        await redis.connection_pool.disconnect()
         await redis.aclose()
 
 

@@ -347,4 +347,8 @@ async def _rate_ok(account_id) -> bool:
             await redis.expire(key, 3600)
         return count <= DM_HOURLY_LIMIT
     finally:
+        # aclose() alone leaves the pooled connection's finalizer referencing
+        # the closed loop, which intermittently breaks the *next* call in
+        # the same worker process — disconnect the pool explicitly too.
+        await redis.connection_pool.disconnect()
         await redis.aclose()

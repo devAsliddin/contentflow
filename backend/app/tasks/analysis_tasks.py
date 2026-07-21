@@ -63,6 +63,13 @@ async def _acquire_lock(account_id: str) -> bool:
     first created it, but each Celery task here runs in its own
     asyncio.run() loop, so a worker process reusing the global client
     across tasks raises "Future attached to a different loop".
+
+    aclose() alone does not fully release the pooled connection — a
+    later task in the same worker process would still intermittently hit
+    the same "different loop" error (a leftover connection's finalizer
+    referencing the closed loop). Explicitly disconnecting the pool
+    avoids that; verified with 6 back-to-back asyncio.run() calls in the
+    same process before shipping this.
     """
     import redis.asyncio as aioredis
     redis = aioredis.from_url(settings.redis_url, decode_responses=True)
@@ -71,6 +78,7 @@ async def _acquire_lock(account_id: str) -> bool:
         result = await redis.set(key, "1", nx=True, ex=LOCK_TTL)
         return result is True
     finally:
+        await redis.connection_pool.disconnect()
         await redis.aclose()
 
 
@@ -80,6 +88,7 @@ async def _release_lock(account_id: str) -> None:
     try:
         await redis.delete(f"analysis_lock:{account_id}")
     finally:
+        await redis.connection_pool.disconnect()
         await redis.aclose()
 
 
