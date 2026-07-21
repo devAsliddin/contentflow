@@ -67,11 +67,15 @@ def _chat_payload(model: str, messages: list[dict], *, cpu_fallback: bool = Fals
         "model": model,
         "messages": messages,
         "stream": False,
+        # Ollama's default (~0.8) is creative-writing-tuned; for structured
+        # captions/JSON actions that made the 12B model occasionally drift
+        # into garbled mixed-script output (Cyrillic/Chinese fragments) or
+        # blend multiple unrelated source stories into one caption. Lower
+        # temperature trades a little creativity for reliability here.
+        "options": {"temperature": 0.5},
     }
     if cpu_fallback:
-        payload["options"] = {
-            "num_ctx": 512,
-        }
+        payload["options"]["num_ctx"] = 512
     return payload
 
 

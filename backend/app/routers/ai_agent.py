@@ -146,6 +146,31 @@ def _placement_options(content_type: str) -> dict[str, dict[str, str]]:
     return {"instagram": {"placement": "feed", "aspect_ratio": "1:1"}}
 
 
+_HASHTAG_RE = re.compile(r"#\S+")
+_EMOJI_RE = re.compile(
+    "["
+    "\U0001F300-\U0001FAFF"
+    "\U00002600-\U000027BF"
+    "\U0001F1E6-\U0001F1FF"
+    "\U0000FE00-\U0000FE0F"  # variation selectors (e.g. the ️ after ⚡/⚽)
+    "]+"
+)
+
+
+def _clean_caption_for_image_prompt(caption: str) -> str:
+    """Strip hashtags/emoji before using the caption as an image theme.
+
+    Hashtags in particular can derail the image: a caption mentioning both
+    a football-piracy story and a ransomware story tagged "#FIFA2026
+    #ransomware" produced a stadium photo instead of anything security-
+    related, because the raw caption text (hashtags included) was handed
+    straight to the image prompt.
+    """
+    text = _HASHTAG_RE.sub("", caption)
+    text = _EMOJI_RE.sub("", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
 async def _generate_post_image(
     caption: str,
     content_type: str,
@@ -171,9 +196,10 @@ async def _generate_post_image(
     else:
         width, height = 1024, 1024
 
+    clean_caption = _clean_caption_for_image_prompt(caption)
     prompt = (
         "Professional, high-quality social media photo. No text, words or lettering anywhere. "
-        f"Theme: {caption[:180]}"
+        f"Theme: {clean_caption[:180]}"
     )
     if post_context:
         prompt += (
@@ -269,6 +295,8 @@ ISHLASH TARTIBI — AVVAL TAKLIF, KEYIN TASDIQ (JUDA MUHIM):
 MAʼLUMOTGA ASOSLANISH (MUHIM):
 - Agar quyida "ISHONCHLI MANBALAR" bloki bo'lsa, faqat o'shandagi HAQIQIY faktlar/sarlavhalarga asoslanib yozing. HECH QACHON "internetga kirishim yo'q" yoki "aniqlay olmayman" demang — sizga eng so'nggi manbalar berilgan.
 - Manba berilmagan bo'lsa, aniqmas umumlashmalardan ("so'nggi hafta yangiliklari") saqlaning va foydalanuvchidan mavzuni aniqlashtiring.
+- Manbalar bir nechta bo'lsa ham, caption FAQAT BITTA voqea/xabarga asoslansin — eng dolzarb va foydalanuvchi so'ragan mavzuga eng mos bittasini tanlang. Bir nechta turli xabarni (masalan sport va kiberxavfsizlik) BITTA captionda ARALASHTIRMANG — bu chalkash va tushunarsiz matn hosil qiladi.
+- Caption FAQAT o'zbek lotin alifbosida bo'lsin. Boshqa til/alifbo (kirill, xitoy, arab va h.k.) so'z yoki belgilarini ARALASHTIRMANG — manba ingliz tilida bo'lsa ham, o'zingiz toza o'zbekchaga o'giring.
 
 KONTEKSTNI CHUQUR TUSHUNING (MUHIM):
 - Foydalanuvchi to'g'ridan "yangilik top" demasa ham, NIYATINI tushuning. Masalan "o'tgan haftada qanday yangiliklar bor", "qaysi yangilik bilan akkauntim uchadi", "qaysi mavzu ko'proq like yig'adi", "nima viral bo'ladi", "trendda nima bor", "engagement uchun nima yozay" kabi savollar — bularning hammasida sizga berilgan ISHONCHLI MANBALARdan foydalanib, real yangiliklar asosida javob bering.
