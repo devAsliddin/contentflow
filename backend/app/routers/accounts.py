@@ -250,13 +250,27 @@ async def disconnect_account(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    """Disconnect (deactivate) an account.
+
+    This used to hard-delete the row, which cascades onto post_logs,
+    follower_snapshots and analysis_jobs (ON DELETE CASCADE) — clicking
+    "disconnect" to fix a broken connection silently wiped all analytics
+    and publish history for that account, and orphaned any already-
+    scheduled posts referencing it (they'd fail at publish time with a
+    confusing "session not found" instead of "account was removed").
+    Soft-deactivate instead: history is preserved, and reconnecting the
+    same account (OAuth upserts by ig_user_id/account_name) re-activates
+    this same row rather than creating a duplicate.
+    """
     result = await db.execute(
         select(Account).where(Account.id == account_id, Account.user_id == current_user.id)
     )
     account = result.scalar_one_or_none()
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
-    await db.delete(account)
+    account.is_active = False
+    account.credentials = encrypt_credentials({})
+    db.add(account)
 
 
 @router.post("/instagram/login", response_model=AccountOut, status_code=status.HTTP_201_CREATED)
@@ -311,18 +325,54 @@ async def instagram_login(
         "ig_session": login_result["session"],
     }
     encrypted = encrypt_credentials(credentials)
+    account_name = data.account_name or login_result["username"]
 
     from datetime import datetime, timezone as tz
-    account = Account(
-        user_id=current_user.id,
-        platform="instagram",
-        account_name=data.account_name or login_result["username"],
-        credentials=encrypted,
-        ig_user_id=login_result["user_id"],
-        oauth_migrated=True,
-        oauth_migrated_at=datetime.now(tz.utc),
+
+    # Re-logging into an account that's already connected (session expired)
+    # or was disconnected (soft-deactivated, see disconnect_account) used to
+    # always INSERT a new row here and hit the uq_user_platform_account
+    # unique constraint — surfaced to the user as a raw 500. Match by
+    # ig_user_id first (handles a username change), then by account_name,
+    # and update in place instead.
+    result = await db.execute(
+        select(Account).where(
+            Account.user_id == current_user.id,
+            Account.platform == "instagram",
+            Account.ig_user_id == login_result["user_id"],
+        )
     )
-    db.add(account)
+    account = result.scalar_one_or_none()
+    if not account:
+        result = await db.execute(
+            select(Account).where(
+                Account.user_id == current_user.id,
+                Account.platform == "instagram",
+                Account.account_name == account_name,
+            )
+        )
+        account = result.scalar_one_or_none()
+
+    if account:
+        account.credentials = encrypted
+        account.account_name = account_name
+        account.ig_user_id = login_result["user_id"]
+        account.is_active = True
+        account.oauth_migrated = True
+        account.oauth_migrated_at = datetime.now(tz.utc)
+        db.add(account)
+    else:
+        account = Account(
+            user_id=current_user.id,
+            platform="instagram",
+            account_name=account_name,
+            credentials=encrypted,
+            ig_user_id=login_result["user_id"],
+            oauth_migrated=True,
+            oauth_migrated_at=datetime.now(tz.utc),
+        )
+        db.add(account)
+
     await db.flush()
     await db.refresh(account)
     return AccountOut.model_validate(account)

@@ -128,30 +128,54 @@ async def _publish_post(task: Task, post_id: str):
                 elif platform == "instagram":
                     import asyncio as _asyncio
                     from pathlib import Path as _Path
-                    from app.services.instagram_service import post_to_instagram_session
-                    ig_session = credentials.get("ig_session")
-                    if not ig_session:
-                        raise ValueError("Instagram session not found. Please reconnect the account.")
                     if not post.media_url or post.media_type not in ("image", "video"):
                         raise ValueError("Instagram requires an uploaded image or video.")
-                    # Convert /media/<filename> URL to local filesystem path
-                    raw_url = post.media_url or ""
-                    if raw_url.startswith("/media/"):
-                        filename = raw_url[len("/media/"):]
-                        media_path = str(_Path(settings.media_dir) / filename)
-                    else:
-                        media_path = raw_url
                     placement = _options_for(post, "instagram").get("placement")
-                    external_id = await _asyncio.get_event_loop().run_in_executor(
-                        None,
-                        lambda: post_to_instagram_session(
-                            session=ig_session,
+
+                    ig_session = credentials.get("ig_session")
+                    access_token = credentials.get("access_token")
+
+                    if ig_session:
+                        # Unofficial (instagrapi) session — connected via the
+                        # username/password login flow.
+                        from app.services.instagram_service import post_to_instagram_session
+                        raw_url = post.media_url or ""
+                        if raw_url.startswith("/media/"):
+                            filename = raw_url[len("/media/"):]
+                            media_path = str(_Path(settings.media_dir) / filename)
+                        else:
+                            media_path = raw_url
+                        external_id = await _asyncio.get_event_loop().run_in_executor(
+                            None,
+                            lambda: post_to_instagram_session(
+                                session=ig_session,
+                                caption=post.caption,
+                                media_path=media_path,
+                                media_type=post.media_type,
+                                placement=placement,
+                            ),
+                        )
+                    elif access_token and account.ig_user_id:
+                        # Official Graph API — connected via OAuth. Was never
+                        # wired up before despite the OAuth scope already
+                        # requesting instagram_business_content_publish, so
+                        # every OAuth-connected account failed here with
+                        # "Instagram session not found" no matter how valid
+                        # its token was.
+                        if post.media_type != "image":
+                            raise ValueError(
+                                "Video/Reel publishing via the official API isn't implemented yet — use an image post."
+                            )
+                        from app.services.instagram_graph import publish_photo
+                        external_id = await publish_photo(
+                            ig_user_id=account.ig_user_id,
+                            access_token=access_token,
+                            image_url=_public_media_url(post.media_url),
                             caption=post.caption,
-                            media_path=media_path,
-                            media_type=post.media_type,
                             placement=placement,
-                        ),
-                    )
+                        )
+                    else:
+                        raise ValueError("Instagram not connected. Please reconnect the account.")
                 elif platform == "tiktok":
                     from app.services.tiktok_service import post_to_tiktok
                     if post.media_type != "video":

@@ -151,3 +151,77 @@ async def reply_to_comment(access_token: str, comment_id: str, text: str) -> dic
     if resp.status_code != 200:
         raise GraphAPIError(resp.status_code, resp.text)
     return resp.json()
+
+
+# ─── Content publishing ─────────────────────────────────────────────────────
+# OAuth already requests instagram_business_content_publish, but nothing in
+# the codebase used it — post_tasks.py only knew how to publish through the
+# unofficial instagrapi (username/password) session, so an account connected
+# the official way could never actually post, failing with "Instagram
+# session not found" regardless of how valid its access_token was.
+
+async def create_media_container(
+    ig_user_id: str,
+    access_token: str,
+    *,
+    image_url: str | None = None,
+    video_url: str | None = None,
+    caption: str | None = None,
+    media_type: str | None = None,  # None => feed image; "STORIES"; "REELS"
+) -> str:
+    """Create a media container for publishing. Returns the creation_id."""
+    params: dict = {"access_token": access_token}
+    if caption:
+        params["caption"] = caption
+    if image_url:
+        params["image_url"] = image_url
+    if video_url:
+        params["video_url"] = video_url
+    if media_type:
+        params["media_type"] = media_type
+
+    async with httpx.AsyncClient(timeout=60) as client:
+        resp = await client.post(f"{_graph_base()}/{ig_user_id}/media", params=params)
+    if resp.status_code != 200:
+        raise GraphAPIError(resp.status_code, f"media container creation failed: {resp.text}")
+    data = resp.json()
+    creation_id = data.get("id")
+    if not creation_id:
+        raise GraphAPIError(resp.status_code, f"no creation id returned: {resp.text}")
+    return creation_id
+
+
+async def publish_media_container(ig_user_id: str, access_token: str, creation_id: str) -> str:
+    """Publish a previously created media container. Returns the published media id."""
+    async with httpx.AsyncClient(timeout=60) as client:
+        resp = await client.post(
+            f"{_graph_base()}/{ig_user_id}/media_publish",
+            params={"creation_id": creation_id, "access_token": access_token},
+        )
+    if resp.status_code != 200:
+        raise GraphAPIError(resp.status_code, f"media publish failed: {resp.text}")
+    data = resp.json()
+    media_id = data.get("id")
+    if not media_id:
+        raise GraphAPIError(resp.status_code, f"no media id returned: {resp.text}")
+    return media_id
+
+
+async def publish_photo(
+    ig_user_id: str,
+    access_token: str,
+    image_url: str,
+    caption: str | None = None,
+    placement: str | None = None,
+) -> str:
+    """Create + publish an image post in one call. Returns the published media id.
+
+    Images publish immediately after container creation — no processing
+    delay like video, which would need a separate status poll before
+    /media_publish accepts it.
+    """
+    media_type = "STORIES" if placement == "story" else None
+    creation_id = await create_media_container(
+        ig_user_id, access_token, image_url=image_url, caption=caption, media_type=media_type,
+    )
+    return await publish_media_container(ig_user_id, access_token, creation_id)
