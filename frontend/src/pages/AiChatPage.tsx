@@ -396,6 +396,36 @@ function ActionCard({ action, onViewCalendar }: { action: AgentAction; onViewCal
     )
   }
 
+  if (action.type === 'delete_post' && action.result) {
+    const caption = action.result.caption as string | undefined
+    return (
+      <div className="mt-2 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300 flex items-center gap-1.5">
+        <Trash2 size={12} />
+        <span>Post o'chirildi{caption ? `: "${caption}"` : ''}</span>
+      </div>
+    )
+  }
+
+  if (action.type === 'reschedule_post' && action.result) {
+    const caption = action.result.caption as string | undefined
+    const scheduledAt = action.result.scheduled_at as string | undefined
+    return (
+      <div className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300 space-y-1">
+        <div className="flex items-center gap-1.5 font-medium">
+          <Calendar size={12} />
+          <span>Post vaqti o'zgartirildi</span>
+        </div>
+        {caption && <div className="text-ink/70">"{caption}"</div>}
+        {scheduledAt && (
+          <div className="flex items-center gap-1 text-faint">
+            <Calendar size={10} />
+            {scheduledAt}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return null
 }
 
@@ -631,6 +661,14 @@ export default function AiChatPage() {
           } else {
             toast.error('Rasmni generatsiya qilib bo\'lmadi')
           }
+        }
+        if (result.action?.type === 'delete_post' && !result.action.error) {
+          toast.success('Post o\'chirildi')
+          queryClient.invalidateQueries({ queryKey: ['posts', 'calendar'] })
+        }
+        if (result.action?.type === 'reschedule_post' && !result.action.error) {
+          toast.success('Post vaqti o\'zgartirildi')
+          queryClient.invalidateQueries({ queryKey: ['posts', 'calendar'] })
         }
       } else {
         const result = await aiService.chat(history, selectedModel)
