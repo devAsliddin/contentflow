@@ -65,3 +65,6 @@ htmlcov/
 *.crt
 secrets/
 .gstack/
+
+# Local tooling
+.claude/

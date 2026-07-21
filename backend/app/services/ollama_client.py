@@ -67,12 +67,24 @@ def _chat_payload(model: str, messages: list[dict], *, cpu_fallback: bool = Fals
         "model": model,
         "messages": messages,
         "stream": False,
-        # Ollama's default (~0.8) is creative-writing-tuned; for structured
-        # captions/JSON actions that made the 12B model occasionally drift
-        # into garbled mixed-script output (Cyrillic/Chinese fragments) or
-        # blend multiple unrelated source stories into one caption. Lower
-        # temperature trades a little creativity for reliability here.
-        "options": {"temperature": 0.5},
+        "options": {
+            # Ollama's default (~0.8) is creative-writing-tuned; for
+            # structured captions/JSON actions that made the 12B model
+            # occasionally drift into garbled mixed-script output
+            # (Cyrillic/Chinese fragments) or blend multiple unrelated
+            # source stories into one caption. Lower temperature trades a
+            # little creativity for reliability here.
+            "temperature": 0.5,
+            # The agent's system prompt (accounts + schedule + full
+            # instructions + a fetched-sources block) alone runs ~4000
+            # tokens. Ollama's num_ctx default (~4096, unset here before)
+            # left almost no budget for the reply, so every longer
+            # conversation silently truncated mid-sentence
+            # (done_reason="length") instead of erroring — the JSON action
+            # block never even got emitted. 8192 covers today's prompt size
+            # with headroom for it to grow.
+            "num_ctx": 8192,
+        },
     }
     if cpu_fallback:
         payload["options"]["num_ctx"] = 512

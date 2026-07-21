@@ -176,12 +176,21 @@ async def _generate_post_image(
     content_type: str,
     user_id: str,
     post_context: str = "",
+    image_prompt: str | None = None,
 ) -> str | None:
     """Best-effort AI image for a chat-created post. Returns a /media URL or None.
 
     `post_context` is a digest of the user's recent posts (see
     `_summarize_recent_posts`); when present it grounds the image in the
     account's existing content so a generated story fits their style.
+
+    `image_prompt` should be an LLM-written English visual description (see
+    the system prompt's "image_prompt" field). The image generator barely
+    understands non-English text — a raw Uzbek caption about a VPN breach
+    produced an unrelated husky-in-the-snow photo, while an equivalent
+    English description of the same story produced an accurate padlock/
+    circuit-board image. Falls back to the (still hashtag/emoji-stripped)
+    caption when the LLM didn't provide one, e.g. for older callers.
 
     Never raises — if no image provider is configured or generation fails, the
     post is still created without an image.
@@ -196,10 +205,10 @@ async def _generate_post_image(
     else:
         width, height = 1024, 1024
 
-    clean_caption = _clean_caption_for_image_prompt(caption)
+    theme = _clean_caption_for_image_prompt(image_prompt or caption)
     prompt = (
         "Professional, high-quality social media photo. No text, words or lettering anywhere. "
-        f"Theme: {clean_caption[:180]}"
+        f"Theme: {theme[:180]}"
     )
     if post_context:
         prompt += (
@@ -308,13 +317,15 @@ SANA QOIDASI (MUHIM):
 
 MUHIM — Foydalanuvchi BITTA postni TASDIQLAGANDA, javob oxirida:
 ```json
-{{"action": "create_post", "caption": "post matni", "platforms": ["instagram"], "scheduled_at": "2026-05-16T18:00:00"}}
+{{"action": "create_post", "caption": "post matni", "image_prompt": "English visual description for the image generator", "platforms": ["instagram"], "scheduled_at": "2026-05-16T18:00:00"}}
 ```
 
 MUHIM — Foydalanuvchi REJANI (haftalik/oylik/ko'p postli) TASDIQLAGANDA, javob oxirida:
 ```json
-{{"action": "create_plan", "posts": [{{"caption": "post 1 matni", "platforms": ["instagram"], "scheduled_at": "2026-05-17T11:00:00", "format": "carousel", "topic": "mavzu"}}, {{"caption": "post 2 matni", "platforms": ["telegram"], "scheduled_at": "2026-05-18T09:00:00", "format": "text", "topic": "mavzu"}}]}}
+{{"action": "create_plan", "posts": [{{"caption": "post 1 matni", "image_prompt": "English visual description", "platforms": ["instagram"], "scheduled_at": "2026-05-17T11:00:00", "format": "carousel", "topic": "mavzu"}}, {{"caption": "post 2 matni", "image_prompt": "English visual description", "platforms": ["telegram"], "scheduled_at": "2026-05-18T09:00:00", "format": "text", "topic": "mavzu"}}]}}
 ```
+
+`image_prompt` HAR DOIM ANGLIYCHA yozilsin (caption tili qanday bo'lishidan qat'i nazar) — rasm generatori faqat inglizcha tavsiflarni to'g'ri tushunadi, o'zbekcha/rus tilidagi so'zlarni berilsa noto'g'ri yoki mavzuga aloqasiz rasm chiqarib beradi. Aniq, ko'rgazmali obyekt/sahna nomlari bilan yozing (masalan "digital padlock on a circuit board, red warning lights, cybersecurity concept" — "post about VPN security" kabi mavhum emas).
 
 POSTNI O'CHIRISH — Foydalanuvchi kalendardan/jadvaldan postni o'chirishni so'rab TASDIQLAGANDA. Yuqoridagi "Rejalashtirilgan / kutilayotgan postlar" ro'yxatidagi [N] raqamidan foydalaning:
 ```json
@@ -326,11 +337,11 @@ POSTNI QAYTA REJALASH — Foydalanuvchi post vaqtini o'zgartirishni (boshqa kung
 {{"action": "reschedule_post", "index": 2, "scheduled_at": "2026-05-19T09:00:00"}}
 ```
 
-RASM PREVIEW — Foydalanuvchi postni TASDIQLASHDAN OLDIN rasmni ko'rishni/preview qilishni so'raganda ("rasmni ko'rsat", "rasmni ko'rmoqchiman", "avval rasmni ko'ray", "preview qil", "rasmga qara"). Bu amal HAQIQIY rasm generatsiya qilib qaytaradi — matn bilan tasvirlab BERMANG, har doim shu action'ni chiqaring. `caption` maydoniga oldin taklif qilgan (yoki foydalanuvchi tasdiqlagan) caption matnini AYNAN shu holicha qo'ying:
+RASM PREVIEW — Foydalanuvchi postni TASDIQLASHDAN OLDIN rasmni ko'rishni/preview qilishni so'raganda ("rasmni ko'rsat", "rasmni ko'rmoqchiman", "avval rasmni ko'ray", "preview qil", "rasmga qara"). Bu amal HAQIQIY rasm generatsiya qilib qaytaradi — matn bilan tasvirlab BERMANG, har doim shu action'ni chiqaring. `caption` maydoniga oldin taklif qilgan (yoki foydalanuvchi tasdiqlagan) caption matnini AYNAN shu holicha, `image_prompt` maydoniga esa YUQORIDAGI qoidaga ko'ra ANGLIYCHA vizual tavsif qo'ying:
 ```json
-{{"action": "preview_image", "caption": "<taklif qilingan caption matni>"}}
+{{"action": "preview_image", "caption": "<taklif qilingan caption matni>", "image_prompt": "English visual description for the image generator"}}
 ```
-Preview ko'rsatilgach, foydalanuvchi tasdiqlasa create_post/create_plan chiqaring — bir xil captiondan foydalaning, rasm postga avtomatik biriktiriladi.
+Preview ko'rsatilgach, foydalanuvchi tasdiqlasa create_post/create_plan chiqaring — bir xil caption va image_prompt'dan foydalaning, rasm postga avtomatik biriktiriladi.
 
 Yoki faqat ma'lumot berayotgan bo'lsangiz:
 ```json
@@ -354,19 +365,19 @@ Siz: Taklif — caption: "<mavzuga mos qisqa, jonli post matni + 2-3 hashtag>". 
 Foydalanuvchi: "ha, qo'y"
 Siz: Rejalashtiryapman ✅
 ```json
-{{"action": "create_post", "caption": "<mavzuga mos yakuniy post matni>", "platforms": ["instagram"], "scheduled_at": "<kelajakdagi ISO sana-vaqt>"}}
+{{"action": "create_post", "caption": "<mavzuga mos yakuniy post matni>", "image_prompt": "<English visual description>", "platforms": ["instagram"], "scheduled_at": "<kelajakdagi ISO sana-vaqt>"}}
 ```
 
 NAMUNA — RASM PREVIEW:
 Foydalanuvchi: "yoq rasmni ko'rsat, joylashdan oldin ko'rmoqchiman"
 Siz: Mana taklif qilingan rasm 👇
 ```json
-{{"action": "preview_image", "caption": "<oldin taklif qilingan caption matni AYNAN shu holicha>"}}
+{{"action": "preview_image", "caption": "<oldin taklif qilingan caption matni AYNAN shu holicha>", "image_prompt": "<English visual description>"}}
 ```
 Foydalanuvchi: "ha tasdiqlayman, qo'y"
 Siz: Rejalashtiryapman ✅
 ```json
-{{"action": "create_post", "caption": "<xuddi shu caption matni>", "platforms": ["instagram"], "scheduled_at": "<kelajakdagi ISO sana-vaqt>"}}
+{{"action": "create_post", "caption": "<xuddi shu caption matni>", "image_prompt": "<xuddi shu image_prompt>", "platforms": ["instagram"], "scheduled_at": "<kelajakdagi ISO sana-vaqt>"}}
 ```
 
 AMALNI TO'G'RI TANLASH (JUDA MUHIM):
@@ -589,7 +600,8 @@ async def agent_chat(
                         post_context = await _summarize_recent_posts(db, current_user.id)
                     await credit_service.consume(db, current_user, "image")
                     gen_url = await _generate_post_image(
-                        caption, data.content_type, str(current_user.id), post_context
+                        caption, data.content_type, str(current_user.id), post_context,
+                        image_prompt=parsed.get("image_prompt"),
                     )
                     if gen_url:
                         media_url = gen_url
@@ -647,7 +659,8 @@ async def agent_chat(
                     post_context = await _summarize_recent_posts(db, current_user.id)
                 await credit_service.consume(db, current_user, "image")
                 gen_url = await _generate_post_image(
-                    caption, data.content_type, str(current_user.id), post_context
+                    caption, data.content_type, str(current_user.id), post_context,
+                    image_prompt=parsed.get("image_prompt"),
                 )
                 display_text = re.sub(r"```json[\s\S]*?```", "", raw_text).strip()
                 if gen_url:
