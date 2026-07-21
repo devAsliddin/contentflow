@@ -375,51 +375,73 @@ Siz: Vaqti o'zgartirildi ✅
 # ── Reliable-source grounding ──────────────────────────────────────────────────
 # When the user asks to create content about news / a topic, pull recent items
 # from reputable outlets so the agent uses real facts instead of guessing.
+#
+# Matching is by STEM PREFIX, not exact word, because Uzbek is agglutinative:
+# "yangiliklarni", "yangilikni", "yangiliklardan" must all match the stem
+# "yangilik" the same way "yangilik" itself does. Exact-set membership missed
+# every inflected form and silently made the agent claim it "has no sources".
 _WEB_TRIGGER_WORDS = frozenset({
-    "yangilik", "yangiliklar", "yangi", "so'nggi", "songgi", "bugungi",
-    "trend", "trendlar", "xabar", "xabarlar", "haqida", "mavzusida",
-    "news", "latest", "recent", "today", "trending", "update", "updates",
-    "breaking", "manba", "manbalar", "hafta", "haftalik",
+    "yangilik", "yangi", "so'nggi", "songgi", "bugungi",
+    "trend", "xabar", "haqida", "mavzu",
+    "news", "latest", "recent", "today", "trending", "update",
+    "breaking", "manba", "hafta",
 })
 _CREATE_WORDS = frozenset({
-    "post", "postlar", "joyla", "joylagin", "joylab", "reja", "plan",
-    "content", "kontent", "yoz", "yozgin", "yozib", "tayyorla", "create",
-    "story", "reels", "carousel",
+    "post", "joyla", "reja", "plan",
+    "content", "kontent", "yoz", "tayyorla", "create",
+    "story", "reel", "carousel",
 })
 # Engagement / virality intent — a normal user asking which news would get more
 # likes / go viral still wants us to look at real current news.
 _ENGAGEMENT_WORDS = frozenset({
-    "like", "likes", "layk", "laik", "laykla", "uchadi", "uchish", "uchishi",
-    "viral", "mashhur", "ommabop", "engagement", "jalb", "izoh", "izohlar",
-    "komment", "kommentariya", "comment", "top", "ko'proq", "koproq", "eng",
-    "qiziqarli", "auditoriya", "obuna", "followers",
+    "like", "layk", "laik", "uchadi", "uchish",
+    "viral", "mashhur", "ommabop", "engagement", "jalb", "izoh",
+    "komment", "top", "ko'proq", "koproq", "eng",
+    "qiziqarli", "auditoriya", "obuna", "follower",
 })
-# Question words — "qanday yangiliklar bor" / "qaysi yangilik" style asks.
+# Question / request words — "qanday yangiliklar bor", "yangilikni toping",
+# "menga bering" style asks all signal the user wants an actual answer/lookup,
+# not just a schedule-management command.
 _QUESTION_WORDS = frozenset({
-    "qanday", "qaysi", "nima", "qanaqa", "qachon", "qanchalik", "nimalar",
+    "qanday", "qaysi", "nima", "qanaqa", "qachon", "qanchalik",
+    "top", "izla", "qidir", "ber", "yubor", "ayt", "korsat", "ko'rsat", "bil",
 })
+
+
+def _normalize_uz(text: str) -> str:
+    """Collapse the several Unicode look-alikes for oʻ/gʻ's apostrophe into one.
+
+    Real Uzbek text (typed on phones, pasted from other apps) mixes the
+    modifier letter U+02BB (ʻ), right single quote U+2019 (’), left single
+    quote U+2018 (‘) and the plain ASCII apostrophe for the same sound.
+    A word list written with one of these never matched the others.
+    """
+    for ch in ("‘", "’", "ʻ", "ʼ", "ʽ", "`"):
+        text = text.replace(ch, "'")
+    return text
 
 
 def _wants_web_sources(text: str) -> bool:
-    low = text.lower()
-    words = set(re.findall(r"[\w']+", low))
-    if not (words & _WEB_TRIGGER_WORDS):
+    low = _normalize_uz(text.lower())
+    words = re.findall(r"[\w']+", low)
+
+    def _hits(stems: frozenset[str]) -> bool:
+        return any(w.startswith(s) for w in words for s in stems)
+
+    if not _hits(_WEB_TRIGGER_WORDS):
         return False
     # Fetch when the user wants to create content, is asking about news, or is
-    # asking which topic/news would perform best (likes / virality).
-    return bool(
-        words & _CREATE_WORDS
-        or words & _ENGAGEMENT_WORDS
-        or words & _QUESTION_WORDS
-    )
+    # asking/requesting which topic/news would perform best (likes / virality).
+    return _hits(_CREATE_WORDS) or _hits(_ENGAGEMENT_WORDS) or _hits(_QUESTION_WORDS)
 
 
 def _extract_topic(text: str) -> str:
-    low = text.lower()
-    for marker in (" haqida", " mavzusida", " about ", " on "):
+    normalized = _normalize_uz(text)
+    low = normalized.lower()
+    for marker in (" haqida", " mavzusida", " mavzuda", " bo'yicha", " yuzasidan", " about ", " on "):
         idx = low.find(marker)
         if idx > 0:
-            return text[:idx].strip()[-80:]
+            return normalized[:idx].strip()[-80:]
     return text.strip()[:120]
 
 
