@@ -149,10 +149,12 @@ async def call_ollama_chat(
 async def call_ollama_vision(
     image_path: str,
     prompt: str,
-    model: str = "gemma3:4b",
+    model: str | None = None,
     timeout: int = 180,
 ) -> str:
     """Send an image to a vision-capable Ollama model and return the response."""
+    if model is None:
+        model = get_settings().ollama_model
     img_bytes = Path(image_path).read_bytes()
     img_b64 = base64.b64encode(img_bytes).decode()
 

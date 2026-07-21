@@ -12,7 +12,11 @@ from app.services.xai_client import call_xai_chat
 # Model constants per spec
 SONNET_MODEL = "claude-sonnet-4-20250514"
 HAIKU_MODEL = "claude-haiku-4-5-20251001"
-OLLAMA_DEFAULT = "qwen2.5:0.5b"
+# Follow whatever's actually configured/pulled on the Ollama node — see the
+# identical fix in ai_agent.py's DEFAULT_MODEL / ai_chat.py's
+# DEFAULT_OLLAMA_MODEL. A hardcoded tag that isn't installed silently
+# pushes every call onto the fallback provider instead of the local model.
+OLLAMA_DEFAULT = _get_settings().ollama_model
 
 # Optimal posting times per platform
 OPTIMAL_TIMES: dict[str, list[str]] = {
@@ -385,7 +389,10 @@ Return JSON:
         if settings.xai_api_key:
             raw_text = await call_xai_vision(image_path, prompt)
         else:
-            raw_text = await call_ollama_vision(image_path, prompt, model="gemma3:4b")
+            # Gemma 3 is multimodal across the family — use whatever text
+            # model is actually configured rather than a hardcoded tag that
+            # may not be pulled on this Ollama node.
+            raw_text = await call_ollama_vision(image_path, prompt, model=settings.ollama_model)
 
         try:
             result = _parse_json(raw_text)

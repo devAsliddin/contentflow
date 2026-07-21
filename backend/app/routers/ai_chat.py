@@ -18,7 +18,13 @@ from app.services import credit_service
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-DEFAULT_OLLAMA_MODEL = "qwen2.5:0.5b"
+# Follow whatever model is actually configured/available (OLLAMA_MODEL in
+# .env) instead of a hardcoded name that may not be pulled on the Ollama
+# node — see the identical fix in ai_agent.py's DEFAULT_MODEL. This value
+# is also what /ai/models advertises as "default", which the frontend uses
+# to pick the chat model, so a stale name here silently pushed every chat
+# request onto the OpenRouter fallback instead of the local model.
+DEFAULT_OLLAMA_MODEL = get_settings().ollama_model
 DEFAULT_CLAUDE_MODEL = "claude-haiku-4-5-20251001"
 
 # ── System prompts ────────────────────────────────────────────────────────────
