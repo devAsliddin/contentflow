@@ -327,13 +327,24 @@ async def _log(db, account_id, rule_id, event_type, object_id, sender_id, text,
 
 
 async def _rate_ok(account_id) -> bool:
-    """Per-account hourly DM cap using a Redis counter."""
-    from app.redis_client import get_redis
+    """Per-account hourly DM cap using a Redis counter.
 
-    redis = get_redis()
-    bucket = datetime.now(timezone.utc).strftime("%Y%m%d%H")
-    key = f"ig_dm_count:{account_id}:{bucket}"
-    count = await redis.incr(key)
-    if count == 1:
-        await redis.expire(key, 3600)
-    return count <= DM_HOURLY_LIMIT
+    Uses a short-lived connection instead of app.redis_client's cached
+    global client: that client binds to whichever asyncio event loop first
+    created it, but this task runs in its own asyncio.run() loop each time,
+    so a worker process reusing the global client on a later webhook event
+    raises "Future attached to a different loop" — silently dropping the
+    reply (same bug already found/fixed in analysis_tasks.py).
+    """
+    import redis.asyncio as aioredis
+
+    redis = aioredis.from_url(settings.redis_url, decode_responses=True)
+    try:
+        bucket = datetime.now(timezone.utc).strftime("%Y%m%d%H")
+        key = f"ig_dm_count:{account_id}:{bucket}"
+        count = await redis.incr(key)
+        if count == 1:
+            await redis.expire(key, 3600)
+        return count <= DM_HOURLY_LIMIT
+    finally:
+        await redis.aclose()

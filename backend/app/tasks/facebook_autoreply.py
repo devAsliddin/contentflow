@@ -400,16 +400,23 @@ async def _rate_ok(account_id) -> bool:
 
     Cap: FB_PAGE_HOURLY_LIMIT (100) per account per hour.
     Key: fb_reply_count:{account_id}:{YYYYMMDDHH}
-    """
-    from app.redis_client import get_redis
 
-    redis = get_redis()
-    bucket = datetime.now(timezone.utc).strftime("%Y%m%d%H")
-    key = f"fb_reply_count:{account_id}:{bucket}"
-    count = await redis.incr(key)
-    if count == 1:
-        await redis.expire(key, 3600)
-    return count <= FB_PAGE_HOURLY_LIMIT
+    Uses a short-lived connection instead of app.redis_client's cached
+    global client — see the identical fix (and full explanation) in
+    instagram_autoreply.py._rate_ok / analysis_tasks.py._acquire_lock.
+    """
+    import redis.asyncio as aioredis
+
+    redis = aioredis.from_url(settings.redis_url, decode_responses=True)
+    try:
+        bucket = datetime.now(timezone.utc).strftime("%Y%m%d%H")
+        key = f"fb_reply_count:{account_id}:{bucket}"
+        count = await redis.incr(key)
+        if count == 1:
+            await redis.expire(key, 3600)
+        return count <= FB_PAGE_HOURLY_LIMIT
+    finally:
+        await redis.aclose()
 
 
 # ─── Beat tasks (registered in celery_app.py) ────────────────────────────────
