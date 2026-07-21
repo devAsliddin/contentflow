@@ -286,6 +286,25 @@ function ActionCard({ action, onViewCalendar }: { action: AgentAction; onViewCal
     )
   }
 
+  if (action.type === 'preview_image' && action.result) {
+    const imageUrl = action.result.image_url as string | undefined
+    return (
+      <div className="mt-2 rounded-lg border border-indigo-500/30 bg-indigo-500/10 p-2 text-xs space-y-2 max-w-xs">
+        <div className="flex items-center gap-1.5 font-medium text-indigo-400">
+          <ImageIcon size={12} />
+          Rasm preview
+        </div>
+        {imageUrl && (
+          <img
+            src={imageUrl}
+            alt="AI rasm preview"
+            className="w-full rounded-md border border-line object-cover"
+          />
+        )}
+      </div>
+    )
+  }
+
   if (action.type === 'create_post' && action.result) {
     const caption = action.result.caption as string | undefined
     const platforms = action.result.platforms as string[] | undefined
@@ -293,8 +312,9 @@ function ActionCard({ action, onViewCalendar }: { action: AgentAction; onViewCal
     const status = action.result.status as string | undefined
     const contentType = action.result.content_type as string | undefined
     const imageGenerated = action.result.image_generated as boolean | undefined
+    const mediaUrl = action.result.media_url as string | undefined
     return (
-      <div className="mt-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300 space-y-1">
+      <div className="mt-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300 space-y-1 max-w-xs">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5 font-medium text-emerald-400">
             <CheckCircle size={12} />
@@ -310,6 +330,13 @@ function ActionCard({ action, onViewCalendar }: { action: AgentAction; onViewCal
             </button>
           )}
         </div>
+        {mediaUrl && (
+          <img
+            src={mediaUrl}
+            alt="Post rasmi"
+            className="w-full rounded-md border border-emerald-500/20 object-cover"
+          />
+        )}
         {caption && (
           <div className="text-ink/70">"{caption}"</div>
         )}
@@ -459,6 +486,10 @@ export default function AiChatPage() {
   const [wantImage, setWantImage] = useState(false)
   const [attachedMedia, setAttachedMedia] = useState<{ url: string; type: string; name: string } | null>(null)
   const [uploadingMedia, setUploadingMedia] = useState(false)
+  // Last AI-generated preview image — reused (not regenerated) if the user
+  // confirms the post right after seeing it, mirroring how a user-attached
+  // file is carried into the next message.
+  const [pendingPreviewMedia, setPendingPreviewMedia] = useState<{ url: string; type: string } | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -555,12 +586,16 @@ export default function AiChatPage() {
     // Allow sending with just an attached file (e.g. "schedule for Monday 18:00").
     if ((!content && !attachedMedia) || loading) return
 
-    const mediaForSend = attachedMedia
+    // Prefer an explicit attachment; otherwise carry the last previewed AI
+    // image into this turn so confirming a preview reuses it instead of
+    // generating a fresh (different) one.
+    const mediaForSend = attachedMedia ?? (pendingPreviewMedia ? { ...pendingPreviewMedia, name: 'AI rasm' } : null)
     const displayContent = content || (mediaForSend ? `📎 ${mediaForSend.name}` : '')
     const userMsg: Message = { id: crypto.randomUUID(), role: 'user', content: displayContent }
     setMessages((prev) => [...prev, userMsg])
     setInput('')
     setAttachedMedia(null)
+    setPendingPreviewMedia(null)
     setLoading(true)
 
     try {
@@ -588,6 +623,14 @@ export default function AiChatPage() {
           const count = result.action.result?.count ?? 0
           toast.success(`${count} ta post yaratildi va kalendarga qo'shildi!`)
           queryClient.invalidateQueries({ queryKey: ['posts', 'calendar'] })
+        }
+        if (result.action?.type === 'preview_image') {
+          const imageUrl = result.action.result?.image_url as string | undefined
+          if (!result.action.error && imageUrl) {
+            setPendingPreviewMedia({ url: imageUrl, type: 'image' })
+          } else {
+            toast.error('Rasmni generatsiya qilib bo\'lmadi')
+          }
         }
       } else {
         const result = await aiService.chat(history, selectedModel)

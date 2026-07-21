@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.database import get_db
 from app.middleware.auth_middleware import get_current_user
 from app.models.account import Account
@@ -23,7 +24,10 @@ from app.utils.timezones import LOCAL_TZ, parse_local_to_utc
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-DEFAULT_MODEL = "gemma3:4b"
+# Follow whatever model is actually configured/available (OLLAMA_MODEL in
+# .env) instead of a hardcoded name — a stale literal here silently falls
+# back to OpenRouter on every request once the Ollama node's model changes.
+DEFAULT_MODEL = get_settings().ollama_model
 
 # The agent reasons in the user's local time (Tashkent, UTC+5). All scheduled_at
 # values the LLM emits are interpreted as this local time and converted to UTC
@@ -294,6 +298,12 @@ POSTNI QAYTA REJALASH — Foydalanuvchi post vaqtini o'zgartirishni (boshqa kung
 {{"action": "reschedule_post", "index": 2, "scheduled_at": "2026-05-19T09:00:00"}}
 ```
 
+RASM PREVIEW — Foydalanuvchi postni TASDIQLASHDAN OLDIN rasmni ko'rishni/preview qilishni so'raganda ("rasmni ko'rsat", "rasmni ko'rmoqchiman", "avval rasmni ko'ray", "preview qil", "rasmga qara"). Bu amal HAQIQIY rasm generatsiya qilib qaytaradi — matn bilan tasvirlab BERMANG, har doim shu action'ni chiqaring. `caption` maydoniga oldin taklif qilgan (yoki foydalanuvchi tasdiqlagan) caption matnini AYNAN shu holicha qo'ying:
+```json
+{{"action": "preview_image", "caption": "<taklif qilingan caption matni>"}}
+```
+Preview ko'rsatilgach, foydalanuvchi tasdiqlasa create_post/create_plan chiqaring — bir xil captiondan foydalaning, rasm postga avtomatik biriktiriladi.
+
 Yoki faqat ma'lumot berayotgan bo'lsangiz:
 ```json
 {{"action": "none"}}
@@ -319,9 +329,22 @@ Siz: Rejalashtiryapman ✅
 {{"action": "create_post", "caption": "<mavzuga mos yakuniy post matni>", "platforms": ["instagram"], "scheduled_at": "<kelajakdagi ISO sana-vaqt>"}}
 ```
 
+NAMUNA — RASM PREVIEW:
+Foydalanuvchi: "yoq rasmni ko'rsat, joylashdan oldin ko'rmoqchiman"
+Siz: Mana taklif qilingan rasm 👇
+```json
+{{"action": "preview_image", "caption": "<oldin taklif qilingan caption matni AYNAN shu holicha>"}}
+```
+Foydalanuvchi: "ha tasdiqlayman, qo'y"
+Siz: Rejalashtiryapman ✅
+```json
+{{"action": "create_post", "caption": "<xuddi shu caption matni>", "platforms": ["instagram"], "scheduled_at": "<kelajakdagi ISO sana-vaqt>"}}
+```
+
 AMALNI TO'G'RI TANLASH (JUDA MUHIM):
 - "o'chir", "o'chirib tashla", "olib tashla", "bekor qil", "kerak emas" + MAVJUD post → delete_post (index bilan). create_post EMAS.
 - "o'tkaz", "ko'chir", "vaqtini o'zgartir", "boshqa kunga/vaqtga", "oldingi kunga", "kechroq", "ertaroq" + MAVJUD post → reschedule_post (index + yangi scheduled_at). create_post EMAS va yangi post yaratMANG.
+- "rasmni ko'rsat/ko'rmoqchiman/preview" → preview_image. Bu hali TASDIQ EMAS — create_post chiqarMANG, faqat rasmni ko'rsating va qayta tasdiq so'rang.
 - Faqat butunlay yangi mavzu so'ralganda create_post ishlating.
 
 NAMUNA — O'CHIRISH:
@@ -549,6 +572,7 @@ async def agent_chat(
                         "status": post.status,
                         "content_type": data.content_type,
                         "image_generated": image_generated,
+                        "media_url": media_url,
                         "reviewed_recent_posts": bool(
                             data.content_type == "story" and image_generated
                         ),
@@ -563,6 +587,34 @@ async def agent_chat(
             except Exception as e:
                 logger.error("Agent create_post failed: %s", e)
                 action = AgentAction(type="create_post", error=str(e))
+                display_text = re.sub(r"```json[\s\S]*?```", "", raw_text).strip()
+
+        elif action_type == "preview_image":
+            try:
+                caption = parsed.get("caption", "") or last_user_msg
+                post_context = ""
+                if data.content_type == "story":
+                    post_context = await _summarize_recent_posts(db, current_user.id)
+                await credit_service.consume(db, current_user, "image")
+                gen_url = await _generate_post_image(
+                    caption, data.content_type, str(current_user.id), post_context
+                )
+                display_text = re.sub(r"```json[\s\S]*?```", "", raw_text).strip()
+                if gen_url:
+                    action = AgentAction(
+                        type="preview_image",
+                        result={"image_url": gen_url, "caption": caption, "content_type": data.content_type},
+                    )
+                    if not display_text:
+                        display_text = "Mana taklif qilingan rasm 👇 Shu holicha joylaymi?"
+                else:
+                    action = AgentAction(type="preview_image", error="Rasm generatsiya qilib bo'lmadi")
+                    if not display_text:
+                        display_text = "Kechirasiz, rasmni generatsiya qila olmadim — birozdan keyin qayta urinib ko'ring."
+
+            except Exception as e:
+                logger.error("Agent preview_image failed: %s", e)
+                action = AgentAction(type="preview_image", error=str(e))
                 display_text = re.sub(r"```json[\s\S]*?```", "", raw_text).strip()
 
         elif action_type == "create_plan":

@@ -19,8 +19,8 @@ export interface PlannedPost {
 }
 
 export interface AgentAction {
-  type: 'create_post' | 'create_plan' | 'schedule_post' | 'list_posts' | 'list_schedule' | 'none'
-  result?: Record<string, unknown> & { posts?: PlannedPost[]; count?: number }
+  type: 'create_post' | 'create_plan' | 'schedule_post' | 'list_posts' | 'list_schedule' | 'preview_image' | 'delete_post' | 'reschedule_post' | 'none'
+  result?: Record<string, unknown> & { posts?: PlannedPost[]; count?: number; image_url?: string; media_url?: string }
   error?: string
 }
 
