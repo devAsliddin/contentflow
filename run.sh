@@ -236,7 +236,7 @@ kill -0 "$BACKEND_PID" 2>/dev/null \
 log "Starting Celery worker..."
 cd "$BACKEND"
 "$VENV_BIN/celery" -A app.tasks.celery_app worker --loglevel=warning --concurrency=2 \
-  -P solo \
+  -P solo -Q celery,analysis,images \
   > "$LOG_DIR/celery.log" 2>&1 &
 CELERY_PID=$!
 echo "$CELERY_PID" >> "$PID_FILE"

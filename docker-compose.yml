@@ -74,7 +74,7 @@ services:
       dockerfile: Dockerfile.backend
     container_name: contentflow_celery
     restart: unless-stopped
-    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=4
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=4 -Q celery,analysis,images
     env_file: .env
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-contentflow}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-contentflow}

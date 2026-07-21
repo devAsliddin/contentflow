@@ -56,18 +56,31 @@ LOCK_TTL = 1800  # 30 minutes
 
 
 async def _acquire_lock(account_id: str) -> bool:
-    """SET NX EX — returns True if lock acquired."""
-    from app.redis_client import get_redis
-    redis = get_redis()
-    key = f"analysis_lock:{account_id}"
-    result = await redis.set(key, "1", nx=True, ex=LOCK_TTL)
-    return result is True
+    """SET NX EX — returns True if lock acquired.
+
+    Uses a short-lived connection instead of app.redis_client's cached
+    global client: that client is bound to whichever asyncio event loop
+    first created it, but each Celery task here runs in its own
+    asyncio.run() loop, so a worker process reusing the global client
+    across tasks raises "Future attached to a different loop".
+    """
+    import redis.asyncio as aioredis
+    redis = aioredis.from_url(settings.redis_url, decode_responses=True)
+    try:
+        key = f"analysis_lock:{account_id}"
+        result = await redis.set(key, "1", nx=True, ex=LOCK_TTL)
+        return result is True
+    finally:
+        await redis.aclose()
 
 
 async def _release_lock(account_id: str) -> None:
-    from app.redis_client import get_redis
-    redis = get_redis()
-    await redis.delete(f"analysis_lock:{account_id}")
+    import redis.asyncio as aioredis
+    redis = aioredis.from_url(settings.redis_url, decode_responses=True)
+    try:
+        await redis.delete(f"analysis_lock:{account_id}")
+    finally:
+        await redis.aclose()
 
 
 # ---------------------------------------------------------------------------
