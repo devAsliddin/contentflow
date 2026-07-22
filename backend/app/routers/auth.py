@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -17,6 +19,7 @@ from app.middleware.auth_middleware import (
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
+logger = logging.getLogger(__name__)
 
 
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
@@ -34,6 +37,8 @@ async def register(request: Request, data: UserCreate, db: AsyncSession = Depend
     db.add(user)
     await db.flush()
     await db.refresh(user)
+
+    logger.info(f"NEW_USER_REGISTERED user={user.id} email={user.email}")
 
     return AuthResponse(
         access_token=create_access_token(user.id),

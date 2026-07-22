@@ -51,6 +51,15 @@ def decode_token(token: str) -> dict[str, Any]:
         )
 
 
+def try_decode_user_id(token: str) -> str | None:
+    """Best-effort sub extraction for request logging — never raises."""
+    try:
+        payload = jwt.decode(token, settings.secret_key, algorithms=[ALGORITHM])
+        return payload.get("sub")
+    except JWTError:
+        return None
+
+
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: AsyncSession = Depends(get_db),

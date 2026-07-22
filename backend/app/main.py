@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 import logging
+import time
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,6 +14,7 @@ from slowapi.util import get_remote_address
 
 from app.config import get_settings
 from app.database import engine, Base
+from app.middleware.auth_middleware import try_decode_user_id
 from app.routers import auth, posts, accounts, ai_plan, scheduler, analytics, upload, admin
 from app.routers import oauth, ai_v2, analytics_v2, ai_v2_ext, workflows, ai_chat, ai_agent
 from app.routers import instagram_connect, instagram_webhook, autoreply
@@ -64,6 +66,34 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
+class RequestContextLoggingMiddleware(BaseHTTPMiddleware):
+    """Tags each request with its authenticated user id (best-effort, from the
+    JWT if present) and logs method/path/status/duration. This lets errors be
+    correlated back to a specific user instead of only showing up as
+    anonymous noise in the access log."""
+
+    async def dispatch(self, request: Request, call_next):
+        request.state.user_id = None
+        auth_header = request.headers.get("authorization", "")
+        if auth_header.startswith("Bearer "):
+            request.state.user_id = try_decode_user_id(auth_header[7:])
+
+        start = time.monotonic()
+        response = await call_next(request)
+        duration_ms = round((time.monotonic() - start) * 1000, 1)
+
+        user_tag = request.state.user_id or "anon"
+        line = f"REQ user={user_tag} {request.method} {request.url.path} -> {response.status_code} ({duration_ms}ms)"
+        if response.status_code >= 500:
+            logger.error(line)
+        elif response.status_code >= 400:
+            logger.warning(line)
+        else:
+            logger.info(line)
+
+        return response
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
@@ -82,6 +112,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RequestContextLoggingMiddleware)
 
 # CORS — origins from settings (comma-separated in env)
 app.add_middleware(
@@ -96,7 +127,8 @@ app.add_middleware(
 # Global exception handler — never leak tracebacks in production
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    logger.exception(f"Unhandled error on {request.method} {request.url}: {exc}")
+    user_tag = getattr(request.state, "user_id", None) or "anon"
+    logger.exception(f"Unhandled error user={user_tag} on {request.method} {request.url}: {exc}")
     if settings.is_production:
         return JSONResponse(status_code=500, content={"detail": "Internal server error"})
     raise exc
