@@ -16,6 +16,8 @@ celery_app = Celery(
         "app.tasks.image_tasks",
         "app.tasks.facebook_autoreply",
         "app.tasks.ai_reply",
+        # V7: time-boxed autonomous posting pilot (see module docstring)
+        "app.tasks.autonomous_posting",
     ],
 )
 
@@ -85,6 +87,13 @@ celery_app.conf.update(
         "cleanup-old-image-jobs": {
             "task": "contentflow.cleanup_old_image_jobs",
             "schedule": crontab(hour=4, minute=30),
+        },
+        # V7: autonomous daily post for the time-boxed unsupervised pilot
+        # (@f1n_cs, until AUTONOMOUS_UNTIL — see autonomous_posting.py).
+        # 12:00 UTC = 17:00 Tashkent, a solid evening-engagement window.
+        "autonomous-daily-post": {
+            "task": "contentflow.autonomous_daily_post",
+            "schedule": crontab(hour=12, minute=0),
         },
     },
 )
