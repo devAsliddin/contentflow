@@ -146,7 +146,10 @@ async def fetch_media_insights(
     Returns None if 403 (scope not granted — use public like/comment counts instead).
     REELS additionally fetch plays and avg_watch_time.
     """
-    base_metrics = "reach,impressions,likes,comments,saved,shares"
+    # Meta removed "impressions" from the Media Insights API (returns 400
+    # "does not support the impressions metric for this media product type");
+    # "views" is the current equivalent.
+    base_metrics = "reach,views,likes,comments,saved,shares"
 
     # REELS support extra metrics
     is_reel = media_type in ("REELS", "VIDEO")
@@ -188,7 +191,9 @@ async def fetch_account_insights(
     """
     url = f"{_graph_base()}/{ig_user_id}/insights"
     params = {
-        "metric": "reach,impressions,profile_views",
+        # "impressions" was removed from the User Insights metric list too
+        # (400 IGApiException) — "views" is Meta's replacement metric.
+        "metric": "reach,views,profile_views",
         "period": "days_28",
         "access_token": token,
     }

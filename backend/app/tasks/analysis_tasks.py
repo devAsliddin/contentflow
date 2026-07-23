@@ -440,7 +440,7 @@ async def _fetch_media_and_metrics(
         saves = _int(insights.get("saved"))
         shares = _int(insights.get("shares"))
         reach = _int(insights.get("reach"))
-        impressions = _int(insights.get("impressions"))
+        impressions = _int(insights.get("views") or insights.get("impressions"))
         plays = _int(insights.get("plays"))
         avg_watch_time_ms = _int(insights.get("ig_reels_avg_watch_time"))
 
@@ -486,7 +486,7 @@ async def _fetch_media_and_metrics(
         following = _int(acc_insights.get("follows_count")) or 0
         media_count = _int(acc_insights.get("media_count")) or 0
         reach_28d = _int(acc_insights.get("reach"))
-        impressions_28d = _int(acc_insights.get("impressions"))
+        impressions_28d = _int(acc_insights.get("views") or acc_insights.get("impressions"))
         profile_views_28d = _int(acc_insights.get("profile_views"))
         demographics = acc_insights.get("demographics")
 
@@ -1019,7 +1019,7 @@ async def _daily_account_snapshot_async() -> None:
                 following = _int(acc_insights.get("follows_count")) or 0
                 media_count = _int(acc_insights.get("media_count")) or 0
                 reach_28d = _int(acc_insights.get("reach"))
-                impressions_28d = _int(acc_insights.get("impressions"))
+                impressions_28d = _int(acc_insights.get("views") or acc_insights.get("impressions"))
                 profile_views_28d = _int(acc_insights.get("profile_views"))
                 demographics = acc_insights.get("demographics")
 
