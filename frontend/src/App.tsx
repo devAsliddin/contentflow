@@ -23,6 +23,7 @@ import ContactPage from '@/pages/ContactPage'
 import AIAnalystPage from '@/pages/AIAnalystPage'
 import AIPostsListPage from '@/pages/AIPostsListPage'
 import AIPostCreatorPage from '@/pages/AIPostCreatorPage'
+import NewsPage from '@/pages/NewsPage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
@@ -74,6 +75,7 @@ export default function App() {
           <Route path="accounts/:id/ai-analyst" element={<AIAnalystPage />} />
           <Route path="ai-posts" element={<AIPostsListPage />} />
           <Route path="ai-posts/create" element={<AIPostCreatorPage />} />
+          <Route path="news" element={<NewsPage />} />
           <Route
             path="admin"
             element={

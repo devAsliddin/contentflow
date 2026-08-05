@@ -49,16 +49,6 @@ _TECH_FEEDS: list[tuple[str, str]] = [
     ("The Guardian — Technology", "https://www.theguardian.com/technology/rss"),
 ]
 
-# Dedicated cybersecurity outlets — a "kiberxavfsizlik" request used to fall
-# through to _TECH_FEEDS' general tech mix, which rarely surfaces security
-# news specifically.
-_CYBER_FEEDS: list[tuple[str, str]] = [
-    ("The Hacker News", "https://feeds.feedburner.com/TheHackersNews"),
-    ("BleepingComputer", "https://www.bleepingcomputer.com/feed/"),
-    ("Krebs on Security", "https://krebsonsecurity.com/feed/"),
-    ("Dark Reading", "https://www.darkreading.com/rss.xml"),
-]
-
 _WORLD_FEEDS: list[tuple[str, str]] = [
     ("BBC News", "https://feeds.bbci.co.uk/news/world/rss.xml"),
     ("Al Jazeera", "https://www.aljazeera.com/xml/rss/all.xml"),
@@ -96,7 +86,6 @@ CATEGORIES: dict[str, dict] = {
     "world":      {"label": "Dunyo",       "feeds": _WORLD_FEEDS},
     "tech":       {"label": "Texnologiya", "feeds": _TECH_FEEDS},
     "ai":         {"label": "Sun'iy intellekt", "feeds": _AI_FEEDS},
-    "cyber":      {"label": "Kiberxavfsizlik", "feeds": _CYBER_FEEDS},
     "business":   {"label": "Biznes",      "feeds": _BUSINESS_FEEDS},
     "science":    {"label": "Fan",         "feeds": _SCIENCE_FEEDS},
     "sport":      {"label": "Sport",       "feeds": _SPORT_FEEDS},
@@ -108,11 +97,6 @@ _TOPIC_GROUPS: list[tuple[frozenset[str], list[tuple[str, str]]]] = [
         "o'zbekiston", "ozbekiston", "uzbekistan", "toshkent", "tashkent",
         "mahalliy", "uzb",
     }), _UZ_FEEDS),
-    (frozenset({
-        "kiberxavfsizlik", "kiber", "xavfsizlik", "cyber", "cybersecurity",
-        "hacker", "hacking", "hack", "malware", "ransomware", "phishing",
-        "breach", "vulnerability", "exploit",
-    }), _CYBER_FEEDS),
     (frozenset({
         "ai", "sun'iy", "suniy", "intellekt", "intelekt", "chatgpt", "openai",
         "gpt", "llm", "neyron", "neural", "machine learning", "mashina",
