@@ -21,6 +21,7 @@ from app.routers import instagram_connect, instagram_webhook, autoreply
 from app.routers import analysis as analysis_v5
 from app.routers import facebook_connect, facebook_webhook, ai_posts
 from app.routers import news
+from app.routers import data_privacy
 
 settings = get_settings()
 limiter = Limiter(key_func=get_remote_address)
@@ -171,6 +172,9 @@ app.include_router(ai_posts.router,         prefix="/api/ai-posts",           ta
 
 # V7 — Yangiliklar (news discovery → AI post)
 app.include_router(news.router, prefix="/api/v1/news", tags=["news-v7"])
+
+# Meta data-privacy callbacks (deauthorize + data-deletion) — required to go Live
+app.include_router(data_privacy.router, prefix="/api/webhooks", tags=["meta-data-privacy"])
 
 # V2-INFRA-002: analytics cache invalidation on post create is triggered inside workflows router
 
